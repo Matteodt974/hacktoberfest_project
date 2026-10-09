@@ -124,3 +124,17 @@ Decisions, discoveries and pitfalls, in chronological order.
   context" → every job failed. Fixed: the thread stores raw (item_id, file) pairs, URLs are built in the request.
 - Verified in headless Chromium: submit URL → progress page → auto-redirect to the notes; KaTeX 7/0 errors;
   path traversal on `/notes/..%2F..` → 404. Readable error messages instead of stack traces.
+
+## M7 — Screenshots mode, slides, print, "What Gemma saw"
+- `pipeline/images_mode.py`: 1–20 images resized to 1024 px → **step A**, one multimodal call grouping images into
+  sections (512 px when > 10 images) → **step B**, Pass 2 per group with the user's context as transcript. Cached under
+  `data/images_<hash>/`. CLI `python -m lecturify images <files|dir> --title --context-file`, web tab "My screenshots".
+- Bug found on the first real run: **Gemma returned 0-based `image_indices`** although images are labeled "Image 1…",
+  which shifted every section title by one. Fix: prompt states "1-based, Image 1 is 1, last is k", and `_groups`
+  detects a 0-based answer (min 0, max k-1) and shifts it. Unit-tested.
+- Test deck: 4 dark math slides rendered with matplotlib (limit definition, power rule, chain rule, gradient).
+  Gemma transcribed **all 6 formulas exactly** (`\lim_{h \to 0} \frac{f(x+h)-f(x)}{h}`, `\nabla f = (\partial f/\partial x, …)`),
+  3 coherent sections, 4 calls / 206 s model latency. Browser upload path tested too (Playwright).
+- Slides mode (one section per screen, ← → Esc) and print CSS (each section starts a page, panel and toolbar hidden)
+  were built into the M5 template; verified via screenshots and a Chromium PDF (12 pages for 5 sections).
+- Formulas are laid out side by side (flex) instead of one tall vector per row.

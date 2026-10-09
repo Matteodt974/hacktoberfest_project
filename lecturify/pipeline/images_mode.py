@@ -36,10 +36,12 @@ def _to_jpeg(data: bytes, width: int) -> bytes:
 
 def _groups(outline: ImagesOutline, k: int) -> list[list[int]]:
     """Clean Gemma's grouping: valid 1-based indices, each image once, every image covered, sorted."""
+    all_idx = [i for sec in outline.sections for i in sec.image_indices]
+    shift = 1 if all_idx and min(all_idx) == 0 and max(all_idx) <= k - 1 else 0  # model answered 0-based
     seen: set[int] = set()
     groups: list[list[int]] = []
     for sec in outline.sections:
-        g = sorted({i for i in sec.image_indices if 1 <= i <= k and i not in seen})
+        g = sorted({i + shift for i in sec.image_indices if 1 <= i + shift <= k and i + shift not in seen})
         seen.update(g)
         groups.append(g)
     missing = [i for i in range(1, k + 1) if i not in seen]

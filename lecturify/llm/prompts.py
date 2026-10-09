@@ -83,7 +83,8 @@ IMAGES_OUTLINE_USER = """{title_line}Write everything in: {language_name}
 You are given {k} images, in order: screenshots of a lecture (slides, whiteboard, video frames), each labeled with its
 number. {context_line}
 Group the images into 1–{max_sections} ordered sections that follow the teaching progression. Every image belongs to
-exactly one section; sections use consecutive images. Then propose a course title, a 3–4 sentence summary and the
+exactly one section; sections use consecutive images. "image_indices" are the image numbers exactly as labeled,
+1-based: "Image 1" is 1, and the last image is {k}. Then propose a course title, a 3–4 sentence summary and the
 prerequisites.
 
 Return ONLY a JSON object with exactly this shape:
