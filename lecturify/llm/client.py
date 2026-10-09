@@ -210,7 +210,13 @@ class GemmaClient:
             try:
                 parsed = self._validate(raw, schema)
             except (ValueError, ValidationError) as err2:
-                raise LLMError(f"{task_name}: model did not return valid JSON after repair: {err2}") from err2
+                log.warning("%s: repair failed too (%s), one fresh attempt", task_name, str(err2)[:200])
+                raw, usage = self._call_json(task_name + ":retry", system, parts, model, thinking)
+                account(usage)
+                try:
+                    parsed = self._validate(raw, schema)
+                except (ValueError, ValidationError) as err3:
+                    raise LLMError(f"{task_name}: model did not return valid JSON after repair: {err3}") from err3
 
         if cache_file:
             cache_file.parent.mkdir(parents=True, exist_ok=True)

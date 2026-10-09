@@ -41,6 +41,13 @@ def select_candidates(frames: list[dict], start: float, end: float, k: int) -> l
     return sorted(picked, key=lambda f: f["t"])
 
 
+def failed_notes(sec: SectionOutline) -> SectionNotes:
+    md = (sec.summary or "") + "\n\n*Gemma's notes for this section could not be generated (API error). " \
+         "Run the same command again: every other section is cached, only this one will be retried.*"
+    return SectionNotes(best_image=1, image_choice_reason="(not generated)", notes_markdown=md.strip(),
+                        key_points=list(sec.key_concepts[:4]))
+
+
 def _guard(notes: SectionNotes, cands: list[dict]) -> SectionNotes:
     k = len(cands)
     if not 1 <= notes.best_image <= k:
@@ -79,17 +86,30 @@ def make_notes(video_id: str, outline: CourseOutline, cues: list[dict], frames: 
                cfg: Config, progress: Callable[[int, int], None] | None = None) -> list[dict]:
     vdir = cfg.video_dir(video_id)
     out = vdir / "notes.json"
+    previous: dict[int, dict] = {}
     if out.exists() and not cfg.force:
-        return json.loads(out.read_text())
+        previous = {r["index"]: r for r in json.loads(out.read_text())}
+        if not any(r.get("failed") for r in previous.values()):
+            return list(previous.values())
     n = len(outline.sections)
     done = 0
 
     def work(i: int) -> dict:
         nonlocal done
+        if i in previous and not previous[i].get("failed"):
+            done += 1
+            return previous[i]
         sec = outline.sections[i]
         cands = select_candidates(frames, sec.start_s, sec.end_s, cfg.max_images_per_section)
-        notes = section_notes(i, sec, outline, cands, transcript_for_llm(cues, sec.start_s, sec.end_s),
-                              vdir, client, cfg)
+        try:
+            notes = section_notes(i, sec, outline, cands, transcript_for_llm(cues, sec.start_s, sec.end_s),
+                                  vdir, client, cfg)
+        except Exception as e:  # noqa: BLE001 — never let one section kill the demo
+            log.error("Section %d/%d failed (%s); placeholder used, it will be retried on the next run", i + 1, n, e)
+            done += 1
+            if progress:
+                progress(done, n)
+            return {"index": i, "candidates": cands, "failed": True, "notes": failed_notes(sec).model_dump()}
         done += 1
         if progress:
             progress(done, n)

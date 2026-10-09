@@ -138,3 +138,12 @@ Decisions, discoveries and pitfalls, in chronological order.
 - Slides mode (one section per screen, ← → Esc) and print CSS (each section starts a page, panel and toolbar hidden)
   were built into the M5 template; verified via screenshots and a Chromium PDF (12 pages for 5 sections).
 - Formulas are laid out side by side (flex) instead of one tall vector per row.
+
+## Robustness fix after Matteo's laptop run (before M8)
+- Matteo's run crashed on `pass2:section5: model did not return valid JSON after repair: Expecting ',' delimiter`.
+  Re-running worked immediately because the outline and the 4 other sections came from `llm_cache`.
+- A single bad section must never kill the demo. Three layers now:
+  1. local repair with `json-repair` (MIT) when `json.loads` fails (unescaped quotes, missing commas) — no API call;
+  2. the existing LLM "repair" round; 3. one fresh attempt with the original prompt.
+- If a section still fails, `make_notes` writes a placeholder section (`"failed": true`, the outline summary + an
+  explanation) and the run completes; the next run regenerates only failed sections. Unit-tested with a fake client.
