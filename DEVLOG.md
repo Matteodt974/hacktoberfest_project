@@ -173,3 +173,18 @@ Decisions, discoveries and pitfalls, in chronological order.
   committed), CoVe and screenshots mode documented, quickstart starts with `python -m lecturify web`, dependency
   licenses (json-repair added), limitations incl. API instability.
 - The `mvp` tag exists locally on a46af87 but this environment can only push the branch (tag push → HTTP 403).
+
+## Feature: "eyes-closed" ablation (approved by Matteo after a ranked brainstorm)
+- Brainstorm: 4 ideation lenses (Gemma multimodal, learning, demo, open source) produced 27 ideas, scored by 3 judges
+  (standout / feasibility). Matteo approved only #1: the ablation. The offline local model is documented in the
+  README "Roadmap", not implemented.
+- `pipeline/ablation.py`: same Pass 2 task, same model / thinking / language / transcript string, **no Image part**
+  (unit-tested). New prompts `ABLATION_*` are the Pass 2 text minus image instructions; Pass 2 constants untouched
+  so its cache stays valid; a test asserts the shared clauses are identical. Formulas forced to source=transcript.
+- Only the text-only side is stored (`ablation.json`, own GemmaClient so `stats.json` is not overwritten, cost
+  recorded); the comparison (`compare`, strict `norm_latex`, one-to-one matching, split by source) runs at render
+  time against the current notes.json. Skips: Pass 2 placeholder sections, screenshots mode without context text.
+  Partial results are not cached. Hidden in slides and print.
+- Real results: LLM video 7 formulas with images vs **0** without (7 only from frames, 5/5 figures); calculus slides
+  6 vs **0** (22 vs 1 math expressions in the notes text). Without images Gemma does not hallucinate formulas but
+  its notes become generic. CLI `--ablation`, web checkbox, progress step "Ablation".

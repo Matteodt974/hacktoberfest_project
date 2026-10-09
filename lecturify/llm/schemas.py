@@ -113,3 +113,10 @@ class VItem(BaseModel):
 
 class VRevision(BaseModel):
     items: list[VItem]
+
+
+# ---------------------------------------------------------------- ablation (same task without images)
+class TextOnlyNotes(BaseModel):
+    formulas: list[Formula] = Field(default_factory=list)
+    notes_markdown: str
+    key_points: list[str] = Field(default_factory=list)

@@ -50,6 +50,7 @@ class Config:
 
     force: bool = False
     verify: bool = False  # Pass 3: Chain-of-Verification
+    ablation: bool = False  # same notes WITHOUT images, to measure what seeing the frames adds
 
     @property
     def language_name(self) -> str:

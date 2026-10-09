@@ -2,8 +2,7 @@
 
 **Paste a YouTube lecture, get an illustrated course handout. Gemma 4 *watches* the video's frames, picks the best figure for each section and reads the formulas off the screen into LaTeX.**
 
-<p align="center"><img src="docs/screenshot.png" width="640" alt="A Lecturify section: the figure Gemma chose, formulas read from the slides with source and verification badges, notes, key points and the 'What Gemma saw' panel"></p>
-<p align="center"><sub>Real output (screenshots mode, 4 slides): formulas transcribed from the images by Gemma 4, each re-checked by Chain-of-Verification.</sub></p>
+**👉 [See a real example of what Lecturify generates](#example-output)**
 
 Built in one day at **Hacktoberfest Hack Day 2026 — UQAM × MLH**, for *Best Use of Gemma 4* and *Best Open-Source AI Project*.
 
@@ -23,6 +22,8 @@ notes that look like a university handout:
 - optional **Chain-of-Verification** (`--verify`): every formula and key point is re-checked by an independent Gemma call
   that sees only the source frame and transcript, never the draft → ✓ verified / ✎ corrected / ⚠ not in source;
 - a **“My screenshots”** mode: upload 1–20 slides or whiteboard photos instead of a video;
+- an optional **ablation** (`--ablation`): the same notes written without the images, side by side, to show what
+  Gemma's vision adds (see the table below);
 - one self-contained `output.html`: normal reading, **slides mode** (← / →, Esc) and **print / PDF** (one section per page).
 
 ## How it works
@@ -72,6 +73,23 @@ On an 8-min video this leaves ~27 frames. `python -m lecturify frames-debug <id>
   classic **LaTeX-in-JSON trap**: `"\frac"` is *valid* JSON for
   form-feed + `rac`, and `"\theta"` for tab + `heta`. Both are repaired before and after parsing, with unit tests.
 
+## Does seeing the frames matter? (ablation)
+
+We don't just claim Gemma 4's vision matters, we measure it. With `--ablation`, Lecturify asks the **same model** for
+the **same notes** a second time: same prompt (minus the image instructions), same thinking level, same transcript,
+but **no images**. The HTML shows both versions side by side ("🙈 Without the images" under each section) plus totals
+in the header. Formulas are matched one-to-one after a strict LaTeX normalisation.
+
+| Run (gemma-4-26b-a4b-it) | Sections | Formulas **with** images | Formulas **without** images | Only found by looking at the frames | Math expressions in the notes text (with / without) | Figure chosen |
+|---|---|---|---|---|---|---|
+| "Large Language Models explained briefly" (3Blue1Brown, 8 min) | 5 | 7 (all read from frames) | **0** | **7** | 0 / 0 | 5 / 0 |
+| 4 calculus slides + 1-line context (`scripts/make_demo_slides.py`) | 3 | 6 (all read from slides) | **0** | **6** | 22 / 1 | 3 / 0 |
+
+Without the frames, Gemma stays faithful (it does not invent formulas from memory), but its notes become generic
+("a fundamental rule used for differentiating…") instead of quoting what the lecture actually shows. Cost of the
+ablation itself: 5 calls / 169 s and 3 calls / 151 s of model latency. Limits: one sample per side (no repeated runs),
+two inputs only; the LLM video is not formula-heavy, so a math lecture would make the gap even more visible.
+
 ## Why Gemma 4
 
 - **Multimodal understanding**: Gemma reads diagrams, matrices and formulas directly from video frames and chooses which
@@ -116,8 +134,8 @@ open data/LPZh9BOjkQs/output.html
 
 ```
 python -m lecturify smoke-test
-python -m lecturify run <youtube_url|video_id> [--lang en|fr] [--model gemma-4-26b-a4b-it|gemma-4-31b-it] [--max-images 6] [--force] [--verify]
-python -m lecturify images <files|dir> [--title "..."] [--context-file notes.txt] [--lang fr] [--verify]
+python -m lecturify run <youtube_url|video_id> [--lang en|fr] [--model gemma-4-26b-a4b-it|gemma-4-31b-it] [--max-images 6] [--force] [--verify] [--ablation]
+python -m lecturify images <files|dir> [--title "..."] [--context-file notes.txt] [--lang fr] [--verify] [--ablation]
 python -m lecturify web [--port 5000]
 python -m lecturify render <video_id>          # re-render output.html offline from the cache
 python -m lecturify ingest <youtube_url>       # metadata + subtitles + video only
@@ -138,10 +156,32 @@ Tests (offline, no network): `python -m pytest`.
 - The Gemini API returned intermittent HTTP 500s and connection resets during development: retries (7, capped backoff)
   absorb them, at the cost of latency (a multimodal call takes 15–100 s with `thinking_level="high"`).
 
+## Roadmap
+
+1. **Offline mode with a local model** *(next improvement, not implemented yet).* If the Gemini API cannot be reached
+   (no internet connection, e.g. in a lecture hall), Lecturify should fall back to running **Gemma 4 locally**. Gemma 4
+   is open-weight, so the same model family runs on a laptop, e.g. a small variant such as E4B through Ollama,
+   llama.cpp or Hugging Face `transformers`, with the same prompts, the same JSON schemas and the same cache. Every
+   model call already goes through one function (`GemmaClient.generate_json` in `lecturify/llm/client.py`), so the
+   plan is: a connectivity check against `generativelanguage.googleapis.com` at startup, then a `LocalGemmaClient`
+   with the same interface. Multimodal input must be supported by the local runtime, and smaller models will read
+   formulas less reliably, so the ablation and CoVe numbers should be re-measured locally.
+2. More frame-level grounding (show the exact region of the frame each formula was read from).
+3. Spaced-repetition export (Anki) of formulas and key points.
+
 ## Built at
 
 Hacktoberfest Hack Day 2026 — UQAM × MLH (Montréal), for **Best Use of Gemma 4** and **Best Open-Source AI Project**.
 Development log with every decision and pitfall: [DEVLOG.md](DEVLOG.md).
+
+## Example output
+
+What the code actually produces: one section of the generated handout (screenshots mode, 4 slides). The figure Gemma
+chose, the formulas it transcribed from the images (👁 source badge) and re-checked with Chain-of-Verification
+(✓ badge), the notes, the key points and the open "What Gemma saw" panel.
+
+<p align="center"><img src="docs/screenshot.png" width="640" alt="A Lecturify section: the figure Gemma chose, formulas read from the slides with source and verification badges, notes, key points and the 'What Gemma saw' panel"></p>
+<p align="center"><sub>Real output (screenshots mode, 4 slides): formulas transcribed from the images by Gemma 4, each re-checked by Chain-of-Verification.</sub></p>
 
 ## License
 
