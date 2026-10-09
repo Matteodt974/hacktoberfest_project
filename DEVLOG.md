@@ -70,3 +70,21 @@ Decisions, discoveries and pitfalls, in chronological order.
   Fix: (1) yt-dlp format now prefers H.264 (`vcodec^=avc1`); (2) `frames.ensure_decodable` transcodes to H.264
   (`video_h264.mp4`) with the static ffmpeg shipped by `imageio-ffmpeg` (new dependency, no system ffmpeg needed).
   Verified: the synthetic video re-encoded to AV1 → same 6 frames. `bundle` now skips every video file.
+
+## M2 — validated on the real demo video
+- Matteo ran ingest + frames on his laptop (YouTube served **AV1** → fixed above): **27 frames kept** for the
+  8-min video. Visual check of the contact sheet: complete diagrams, no black/blank frames; 2–3 near-duplicates
+  (e.g. 02:06 vs 02:21) which Pass 2 absorbs by choosing one image per section.
+- ⚠️ The demo URL's `v=LPZh9BOjkQs` is **"Large Language Models explained briefly"** (3Blue1Brown), not a
+  linear-algebra episode (the `list=` param is ignored). It has few formulas → weak demo of "formulas read from
+  images". Recommendation to Matteo: also ingest a math-heavy video (e.g. "The determinant", `Ip3X9LOh2dk`).
+- Data moved here with `python -m lecturify bundle` (1.6 MB zip, no video).
+
+## M3 — Pass 1 (outline)
+- `pipeline/outline.py`: full `[mm:ss]` transcript in one call (2k tokens in); post-validation sorts, clamps,
+  makes sections contiguous and covering [0, duration], merges sections < 30 s.
+- Section target 4–10 (2–5 if video < 4 min).
+- Real run: **5 coherent sections** (Next-word prediction / Training / RLHF+GPUs / Transformer / Emergence),
+  85 s latency with `thinking_level="high"`.
+- Network: one `httpx.ReadError: Connection reset by peer` on the first try → transport errors are now retried
+  like 429/5xx.

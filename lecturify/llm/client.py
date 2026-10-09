@@ -118,6 +118,7 @@ class GemmaClient:
         thinking: str | None = "minimal", json_mode: bool = False,
     ) -> tuple[str, dict]:
         """One raw call with retries on 429/5xx. Returns (text, usage)."""
+        import httpx
         from google.genai import errors
 
         contents = self._contents(parts)
@@ -128,9 +129,10 @@ class GemmaClient:
             try:
                 with self._sem:
                     resp = self._client.models.generate_content(model=model, contents=contents, config=config)
-            except errors.APIError as e:
-                code = getattr(e, "code", None)
-                retryable = code == 429 or (isinstance(code, int) and code >= 500)
+            except (errors.APIError, httpx.TransportError) as e:
+                code = getattr(e, "code", None) if isinstance(e, errors.APIError) else type(e).__name__
+                retryable = (code == 429 or (isinstance(code, int) and code >= 500)
+                             or isinstance(e, httpx.TransportError))  # connection reset, timeouts
                 if not retryable or attempt == self.max_retries:
                     raise LLMError(f"{task_name}: Gemini API error {code}: {e}") from e
                 sleep = delay + random.uniform(0, delay / 2)
