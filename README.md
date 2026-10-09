@@ -181,7 +181,7 @@ chose, the formulas it transcribed from the images (👁 source badge) and re-ch
 (✓ badge), the notes, the key points and the open "What Gemma saw" panel.
 
 <p align="center"><img src="docs/screenshot.png" width="640" alt="A Lecturify section: the figure Gemma chose, formulas read from the slides with source and verification badges, notes, key points and the 'What Gemma saw' panel"></p>
-<p align="center"><sub>Real output (screenshots mode, 4 slides): formulas transcribed from the images by Gemma 4, each re-checked by Chain-of-Verification.</sub></p>
+<p align="center"><sub>Real output (screenshots mode, 4 slides): the figure Gemma chose, formulas transcribed from the slides (👁) and re-checked by Chain-of-Verification (✓), "What Gemma saw", and the ablation panel: the same model without the images finds 0 formulas instead of 4.</sub></p>
 
 ## License
 
