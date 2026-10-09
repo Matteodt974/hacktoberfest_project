@@ -218,3 +218,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Lecturify
+.env
+data/
+*.mp4
+*.webm
+*.mkv
+output.html
+.venv/
