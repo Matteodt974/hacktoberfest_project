@@ -60,3 +60,18 @@ class SmokeFormula(BaseModel):
 class SmokeImages(BaseModel):
     count: int
     descriptions: list[str]
+
+
+# ---------------------------------------------------------------- screenshots mode
+class ImageGroup(BaseModel):
+    title: str
+    image_indices: list[int]  # 1-based
+    summary: str = ""
+    key_concepts: list[str] = Field(default_factory=list)
+
+
+class ImagesOutline(BaseModel):
+    course_title: str
+    summary: str = ""
+    prerequisites: list[str] = Field(default_factory=list)
+    sections: list[ImageGroup]

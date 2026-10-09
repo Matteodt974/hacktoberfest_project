@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generating… — Lecturify</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body><div class="wrap">
+<div class="brand"><a href="{{ url_for('index') }}" style="color:inherit;text-decoration:none">Lecturify<span>.</span></a></div>
+<h1 id="title">Generating your notes…</h1>
+<div id="error" class="error" hidden></div>
+<div class="panel">
+  <ul class="steps" id="steps">
+    {% for key, label in steps %}<li data-step="{{ key }}"><span class="dot"></span><span>{{ label }}</span><span class="msg"></span></li>{% endfor %}
+  </ul>
+  <div class="bar" id="bar" hidden><i></i></div>
+  <div class="strip" id="strip"></div>
+</div>
+<p class="hint">Gemma 4 runs two passes: one reads the whole transcript to structure the lecture, then one multimodal call per section looks at the frames.</p>
+</div>
+<script>
+var jobUrl = "{{ url_for('job_status', job_id=job.id) }}", shown = 0;
+function tick() {
+  fetch(jobUrl).then(function (r) { return r.json(); }).then(function (j) {
+    document.querySelectorAll('#steps li').forEach(function (li) {
+      var s = li.dataset.step, done = j.steps_done.indexOf(s) >= 0;
+      li.classList.toggle('done', done);
+      li.classList.toggle('active', !done && s === j.step && j.status === 'running');
+      li.querySelector('.dot').textContent = done ? '✓' : '';
+      if (s === j.step) li.querySelector('.msg').textContent = j.message || '';
+    });
+    if (j.progress && j.progress.total) {
+      document.getElementById('bar').hidden = false;
+      document.querySelector('#bar i').style.width = (100 * j.progress.done / j.progress.total) + '%';
+    }
+    var strip = document.getElementById('strip');
+    for (; shown < j.frames_preview.length; shown++) {
+      var im = document.createElement('img'); im.src = j.frames_preview[shown]; im.loading = 'lazy'; strip.appendChild(im);
+    }
+    if (j.status === 'done' && j.result_url) { location.href = j.result_url; return; }
+    if (j.status === 'error') {
+      document.getElementById('title').textContent = 'Something went wrong';
+      var e = document.getElementById('error'); e.hidden = false; e.textContent = j.error;
+      return;
+    }
+    setTimeout(tick, 1000);
+  }).catch(function () { setTimeout(tick, 2000); });
+}
+tick();
+</script>
+</body></html>

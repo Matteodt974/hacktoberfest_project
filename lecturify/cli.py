@@ -34,6 +34,16 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("render", help="re-render data/<video_id>/output.html offline from cached JSON")
     p.add_argument("video_id")
 
+    p = sub.add_parser("images", help="notes from 1-20 screenshots (files or a directory), no YouTube needed")
+    p.add_argument("paths", nargs="+", type=Path)
+    p.add_argument("--title", default="")
+    p.add_argument("--context-file", type=Path)
+    _common(p)
+
+    p = sub.add_parser("web", help="start the web UI")
+    p.add_argument("--port", type=int, default=5000)
+    p.add_argument("--host", default="127.0.0.1")
+
     p = sub.add_parser("ingest", help="download metadata, transcript and video (needs YouTube access)")
     p.add_argument("url")
     _common(p)
@@ -89,6 +99,21 @@ def _dispatch(args, cfg: Config) -> None:
     elif args.cmd == "render":
         from .render.html import render
         print(f"Notes: {render(cfg.video_dir(args.video_id), cfg)}")
+
+    elif args.cmd == "images":
+        from .pipeline.images_mode import run_images
+        files: list[Path] = []
+        for p in args.paths:
+            files += sorted(x for x in p.iterdir() if x.suffix.lower() in (".png", ".jpg", ".jpeg", ".webp")) \
+                if p.is_dir() else [p]
+        context = args.context_file.read_text() if args.context_file else ""
+        out = run_images([(f.name, f.read_bytes()) for f in files], cfg, title=args.title, context=context)
+        print(f"Notes: {out}")
+
+    elif args.cmd == "web":
+        from .web.app import create_app
+        print(f"Lecturify running on http://{args.host}:{args.port}")
+        create_app(cfg).run(host=args.host, port=args.port, debug=False, threaded=True)
 
     elif args.cmd == "ingest":
         from .ingest.youtube import ingest

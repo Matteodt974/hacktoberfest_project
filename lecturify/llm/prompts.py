@@ -77,3 +77,20 @@ Return ONLY a JSON object with exactly this shape:
   "key_points": [string]
 }}
 """
+
+IMAGES_OUTLINE_USER = """{title_line}Write everything in: {language_name}
+
+You are given {k} images, in order: screenshots of a lecture (slides, whiteboard, video frames), each labeled with its
+number. {context_line}
+Group the images into 1–{max_sections} ordered sections that follow the teaching progression. Every image belongs to
+exactly one section; sections use consecutive images. Then propose a course title, a 3–4 sentence summary and the
+prerequisites.
+
+Return ONLY a JSON object with exactly this shape:
+{{
+  "course_title": string,
+  "summary": string,
+  "prerequisites": [string],
+  "sections": [{{"title": string, "image_indices": [integer], "summary": string, "key_concepts": [string]}}]
+}}
+"""

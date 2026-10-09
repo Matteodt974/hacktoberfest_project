@@ -62,6 +62,8 @@ def section_notes(i: int, sec: SectionOutline, outline: CourseOutline, cands: li
         course_title=outline.course_title, i=i + 1, n=n, section_title=sec.title,
         start_mmss=mmss(sec.start_s) if timestamps else "", end_mmss=mmss(sec.end_s) if timestamps else "",
         language_name=cfg.language_name, k=len(cands))
+    if not timestamps:
+        header = header.replace(" (–)", "")
     parts: list = [header]
     for j, f in enumerate(cands, 1):
         label = f"Image {j} — t={mmss(f['t'])}" if timestamps else f"Image {j}"

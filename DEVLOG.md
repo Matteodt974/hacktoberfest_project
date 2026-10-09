@@ -115,3 +115,12 @@ Decisions, discoveries and pitfalls, in chronological order.
 - Verified in headless Chromium: 7 formulas typeset, 0 KaTeX errors, figures and panel OK, slides OK.
 - `python -m lecturify run <url>` works fully offline once a video is cached (every step skips on its JSON);
   rebuilding outline/notes from `llm_cache` reproduced `notes.json` byte for byte.
+
+## M6 — Flask UI
+- Routes per spec (`/`, `POST /jobs`, `GET /jobs/<id>`, `/jobs/<id>/view`, `/notes/<id>`) + `/jobs/images`,
+  `/frames/<id>/<name>` (live thumbnail strip) and `/notes/<id>/download`. In-memory job registry, worker thread.
+- `/notes/<id>` re-renders with the **local KaTeX copy** (`output_web.html`) → the demo works without CDN access.
+- Bug found by driving the UI in Chromium: `url_for` called from the worker thread → "Working outside of application
+  context" → every job failed. Fixed: the thread stores raw (item_id, file) pairs, URLs are built in the request.
+- Verified in headless Chromium: submit URL → progress page → auto-redirect to the notes; KaTeX 7/0 errors;
+  path traversal on `/notes/..%2F..` → 404. Readable error messages instead of stack traces.

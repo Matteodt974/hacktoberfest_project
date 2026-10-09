@@ -51,11 +51,11 @@ def run_video(url: str, cfg: Config, progress: Progress = _noop) -> Path:
 
     progress("download", "Reading video metadata…")
     meta = youtube.fetch_meta(vid, cfg)
-    progress("transcript", "Fetching subtitles…")
-    cues = youtube.fetch_transcript(vid, cfg)
     progress("download", f"Downloading “{meta['title']}”…")
     if not (vdir / "frames.json").exists() or cfg.force:
         youtube.download_video(vid, cfg)
+    progress("transcript", "Fetching subtitles…")
+    cues = youtube.fetch_transcript(vid, cfg)
     progress("frames", "Extracting stable frames…")
     frames = frames_mod.extract_frames(vid, cfg)
     progress("frames", f"{len(frames)} frames kept", frames=[f["file"] for f in frames], video_id=vid)
