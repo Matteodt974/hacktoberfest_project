@@ -169,11 +169,6 @@ Tests (offline, no network): `python -m pytest`.
 2. More frame-level grounding (show the exact region of the frame each formula was read from).
 3. Spaced-repetition export (Anki) of formulas and key points.
 
-## Built at
-
-Hacktoberfest Hack Day 2026 — UQAM × MLH (Montréal), for **Best Use of Gemma 4** and **Best Open-Source AI Project**.
-Development log with every decision and pitfall: [DEVLOG.md](DEVLOG.md).
-
 ## Example output
 
 What the code actually produces: one section of the generated handout (screenshots mode, 4 slides). The figure Gemma
