@@ -33,6 +33,8 @@ class Config:
     min_edge_density: float = 0.01
     group_phash_dist: int = 6
     global_phash_dist: int = 4
+    subsume_window_s: float = 20.0
+    subsume_containment: float = 0.85
     max_frames: int = 150
     min_frames: int = 5
     fallback_every_s: float = 10.0

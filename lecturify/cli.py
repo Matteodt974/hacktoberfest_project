@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from .config import DEFAULT_MODEL, SUPPORTED_MODELS, Config
 
@@ -24,10 +25,76 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("smoke-test", help="check Gemma 4 access (text, image, JSON, multi-image)")
     _common(p)
 
+    p = sub.add_parser("ingest", help="download metadata, transcript and video (needs YouTube access)")
+    p.add_argument("url")
+    _common(p)
+    p.add_argument("--force", action="store_true")
+
+    p = sub.add_parser("import-local", help="import a local video + subtitles (.vtt/.json) without YouTube")
+    p.add_argument("video_id")
+    p.add_argument("video", type=Path)
+    p.add_argument("subs", type=Path)
+    p.add_argument("--title")
+    p.add_argument("--channel", default="")
+
+    p = sub.add_parser("frames", help="extract stable frames from data/<video_id>/video.mp4")
+    p.add_argument("video_id")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--motion-threshold", type=float)
+
+    p = sub.add_parser("frames-debug", help="extract frames (if needed) and write an HTML contact sheet")
+    p.add_argument("video_id")
+    p.add_argument("--force", action="store_true")
+    p.add_argument("--motion-threshold", type=float)
+
+    p = sub.add_parser("bundle", help="zip data/<video_id>/ without the video (to move a cache between machines)")
+    p.add_argument("video_id")
+
     args = ap.parse_args(argv)
-    cfg = Config(model=args.model, lang=getattr(args, "lang", "en"))
+    cfg = Config(model=getattr(args, "model", DEFAULT_MODEL), lang=getattr(args, "lang", "en"),
+                 force=getattr(args, "force", False))
+    if getattr(args, "motion_threshold", None):
+        cfg.motion_threshold = args.motion_threshold
+
+    try:
+        _dispatch(args, cfg)
+    except Exception as e:  # readable errors instead of stack traces
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            raise
+        logging.getLogger("lecturify").error("%s: %s", type(e).__name__, e)
+        sys.exit(1)
+
+
+def _dispatch(args, cfg: Config) -> None:
 
     if args.cmd == "smoke-test":
         from .smoke import run_smoke
         res = run_smoke(cfg)
         sys.exit(0 if all(v.get("ok", True) for v in res.values() if isinstance(v, dict) and "ok" in v) else 1)
+
+    elif args.cmd == "ingest":
+        from .ingest.youtube import ingest
+        vid, meta, cues, video = ingest(args.url, cfg)
+        print(f"{vid}: '{meta['title']}' ({meta['duration']:.0f}s), {len(cues)} transcript cues, video at {video}")
+
+    elif args.cmd == "import-local":
+        from .ingest.youtube import import_local
+        import_local(args.video_id, args.video, args.subs, cfg, title=args.title, channel=args.channel)
+        print(f"Imported into {cfg.video_dir(args.video_id)}")
+
+    elif args.cmd in ("frames", "frames-debug"):
+        from .ingest.frames import contact_sheet, extract_frames
+        frames = extract_frames(args.video_id, cfg)
+        print(f"{len(frames)} frames kept")
+        if args.cmd == "frames-debug":
+            print(f"Contact sheet: {contact_sheet(args.video_id, cfg)}")
+
+    elif args.cmd == "bundle":
+        import zipfile
+        vdir = cfg.video_dir(args.video_id)
+        out = cfg.data_dir / f"{args.video_id}_bundle.zip"
+        with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in sorted(vdir.rglob("*")):
+                if f.is_file() and f.name != "video.mp4" and not f.name.startswith("subs."):
+                    z.write(f, f.relative_to(cfg.data_dir))
+        print(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB)")

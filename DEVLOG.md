@@ -42,3 +42,26 @@ Decisions, discoveries and pitfalls, in chronological order.
 - Up to 10 images/request works; we keep `max_images_per_section = 6` (spec) for latency and token cost.
 - YouTube (yt-dlp and youtube-transcript-api) still blocked from the container (proxy 403) → ingestion must run on
   Matteo's laptop; offline import path planned for M1.
+
+## M1 — Ingestion (code done, real run pending on Matteo's laptop)
+- `lecturify/ingest/youtube.py`: URL parsing (watch/youtu.be/shorts/embed/live/m./bare id), yt-dlp metadata
+  (`meta.json`, 20 min warning / 45 min refusal), video-only ≤720p download, transcript via
+  youtube-transcript-api v1.x (`YouTubeTranscriptApi().fetch`) with yt-dlp VTT fallback (manual then auto subs,
+  rolling-caption dedup by longest word overlap), `transcript_for_llm` grouping ~12 s lines prefixed `[mm:ss]`.
+- **Blocker**: the cloud container cannot reach YouTube (egress proxy 403 on youtube.com/googlevideo/ytimg).
+  Decision: ingestion + frame extraction run on Matteo's laptop; `python -m lecturify bundle <id>` zips
+  `data/<id>/` without the video so the cache can be moved here; `import-local` imports a local mp4 + .vtt.
+- Demo video: https://www.youtube.com/watch?v=LPZh9BOjkQs (3Blue1Brown, Essence of linear algebra playlist).
+
+## M2 — Frame sampling (algorithm validated on a synthetic video; real contact sheet pending)
+- Two passes over the video: pass 1 computes grayscale 160 px thumbnails, motion, Canny density and pHash for
+  every 1 s sample (low memory); pass 2 re-reads only the kept full-res frames.
+- pHash computed on the grayscale thumbnail (pHash downsizes to 32×32 anyway).
+- **Added rule (not in spec): partial-drawing subsumption.** Slow animations (motion < threshold) produced
+  several half-drawn "stable" frames. A frame A is dropped if a later frame B within 20 s has ≥ edge density and
+  contains ≥ 85 % of A's (Canny) edge pixels. That is exactly "keep the most complete drawing".
+- Removed an "auto-loosen when few frames" loop I had added: it pushed the threshold to 6.75 and made a
+  continuously-moving wave count as stable. Spec behavior kept: tighten above 150, uniform fallback below 5.
+- Synthetic test (`scripts/make_synthetic_video.py`, 66 s, 3B1B-like dark background, 6 animate-then-hold scenes,
+  1 always-moving wave, 1 black screen): **6 frames kept, exactly one per hold, all complete drawings**;
+  wave and black screen rejected.
