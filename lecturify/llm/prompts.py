@@ -152,3 +152,46 @@ VERIFICATION:
 Return ONLY a JSON object: {{"items": [{{"target": string, "status": "verified" | "corrected" | "doubtful",
 "correction": string | null, "note": string}}]}} with one item per target: {targets}
 """
+
+# ---------------------------------------------------------------- Ablation: same task, NO images
+# Word-for-word the Pass 2 prompt minus everything about images (choosing a figure, formulas read from images,
+# "refer to the figures", image JSON keys). Everything else (formula rules, word budget, key points, escaping) is
+# identical so the comparison with Pass 2 is fair. Pass 2 constants above are untouched (their cache stays valid).
+ABLATION_SYSTEM = (
+    "You are an expert university teaching assistant. You turn a section of a math/science lecture video into "
+    "high-quality course-handout notes. You are faithful to the source, and you never invent formulas."
+)
+
+ABLATION_HEADER = """Course: {course_title}
+Section {i}/{n}: "{section_title}" ({start_mmss}–{end_mmss})
+Write everything in: {language_name}
+
+You are given the transcript of this section of the video (no images).
+"""
+
+ABLATION_TASKS = """
+TRANSCRIPT OF THIS SECTION:
+{transcript}
+
+Tasks:
+1. You may add a formula that is explicitly stated in the transcript (source "transcript", image_index null).
+   Never add a formula that does not appear in the transcript.
+   Keep it meaningful: skip decorative or random-looking numbers, and when the transcript lists many similar items
+   (e.g. a row of vectors or a column of arithmetic), transcribe only 1–2 representative ones and say so in
+   "meaning". At most 6 formulas. If there is no formula at all, return an empty list.
+2. Write concise course notes (120–250 words) in the style of a university handout, in Markdown.
+   Do NOT repeat the section title as a heading; use at most "####" sub-headings, short paragraphs and lists.
+   Use $...$ for inline math and $$...$$ for display math.
+3. List 2–4 key takeaways.
+
+IMPORTANT — JSON escaping: inside JSON strings, write every LaTeX backslash as TWO backslashes
+(write \\\\frac, \\\\vec, \\\\theta — never a single backslash).
+
+Return ONLY a JSON object with exactly this shape:
+{{
+  "formulas": [{{"latex": string, "meaning": string,
+                "source": "transcript", "image_index": null}}],
+  "notes_markdown": string,
+  "key_points": [string]
+}}
+"""

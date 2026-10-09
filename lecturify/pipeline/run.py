@@ -18,10 +18,11 @@ from .outline import make_outline
 
 log = logging.getLogger(__name__)
 
-STEPS = ["download", "transcript", "frames", "outline", "notes", "verify", "render"]
+STEPS = ["download", "transcript", "frames", "outline", "notes", "ablation", "verify", "render"]
 STEP_LABELS = {
     "download": "Download", "transcript": "Subtitles", "frames": "Frame extraction",
     "outline": "Structure (Gemma)", "notes": "Section notes (Gemma, multimodal)",
+    "ablation": "Ablation (Gemma, same task without the images)",
     "verify": "Verification (Gemma, Chain-of-Verification)", "render": "Render",
 }
 
@@ -54,6 +55,15 @@ def run_verify(vdir: Path, notes: list[dict], context_for, client: GemmaClient, 
                  progress=lambda k, n: progress("verify", f"{k} / {n}", done=k, total=n))
 
 
+def run_ablation(vdir: Path, outline, notes: list[dict], context_for, cfg: Config, progress: Progress,
+                 timestamps: bool = True) -> None:
+    from .ablation import make_ablation
+
+    progress("ablation", f"0 / {len(notes)}", done=0, total=len(notes))
+    make_ablation(vdir, outline, notes, context_for, cfg, timestamps=timestamps,
+                  progress=lambda k, n: progress("ablation", f"{k} / {n}", done=k, total=n))
+
+
 def run_video(url: str, cfg: Config, progress: Progress = _noop) -> Path:
     """Every step is cached on disk, so a rerun on an already-ingested video needs no YouTube access."""
     t0 = time.time()
@@ -81,10 +91,14 @@ def _llm_and_render(vid, vdir, meta, cues, frames, cfg: Config, progress: Progre
     progress("notes", f"0 / {len(outline.sections)}", done=0, total=len(outline.sections))
     notes = make_notes(vid, outline, cues, frames, client, cfg,
                        progress=lambda k, n: progress("notes", f"{k} / {n}", done=k, total=n))
+    def section_transcript(r: dict) -> str:
+        sec = outline.sections[r["index"]]
+        return transcript_for_llm(cues, sec.start_s, sec.end_s)
+
+    if cfg.ablation:
+        run_ablation(vdir, outline, notes, section_transcript, cfg, progress)
     if cfg.verify:
-        run_verify(vdir, notes, lambda r: transcript_for_llm(cues, outline.sections[r["index"]].start_s,
-                                                             outline.sections[r["index"]].end_s),
-                   client, cfg, progress)
+        run_verify(vdir, notes, section_transcript, client, cfg, progress)
     save_stats(vdir, client, cfg, len(frames), t0)
     progress("render", "Rendering HTML…")
     out = render(vdir, cfg)

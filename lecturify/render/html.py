@@ -68,6 +68,31 @@ def _check(item: dict | None) -> dict:
             "correction": item.get("correction") if item["status"] == "corrected" else None}
 
 
+def _ablation_view(a: dict | None, with_nt: dict, has_figure: bool) -> dict | None:
+    """Text-only notes of one section + its comparison with the multimodal notes (None if not available)."""
+    if not a or "notes" not in a:
+        return None
+    from ..pipeline.ablation import compare
+
+    t = a["notes"]
+    return {
+        "cmp": compare(with_nt, t, has_figure),
+        "formulas": [f["latex"] for f in t.get("formulas", [])],
+        "notes_html": Markup(markdown_with_math(t.get("notes_markdown", ""))),
+        "key_points": [Markup(markdown_with_math(k).strip().removeprefix("<p>").removesuffix("</p>"))
+                       for k in t.get("key_points", [])],
+    }
+
+
+def _ablation_totals(rows: list[dict], n_sections: int, ablation: dict) -> dict | None:
+    if not rows:
+        return None
+    tot = {k: sum(r[k] for r in rows) for k in rows[0] if k != "figure"}
+    tot.update(compared=len(rows), sections=n_sections, figures=sum(r["figure"] for r in rows),
+               cost=ablation.get("cost", {}))
+    return tot
+
+
 def _data_uri(path: Path, cache: dict[Path, str]) -> str:
     if path not in cache:
         mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
@@ -82,6 +107,9 @@ def build_context(vdir: Path, cfg: Config) -> dict:
     stats = json.loads((vdir / "stats.json").read_text()) if (vdir / "stats.json").exists() else {}
     verification = json.loads((vdir / "verification.json").read_text()) if (vdir / "verification.json").exists() else None
     vmap = {(sec["index"], it["target"]): it for sec in (verification or {}).get("sections", []) for it in sec["items"]}
+    ablation = json.loads((vdir / "ablation.json").read_text()) if (vdir / "ablation.json").exists() else None
+    amap = {a["index"]: a for a in (ablation or {}).get("sections", [])}
+    abl_rows: list[dict] = []
     timestamps = not meta.get("images_mode", False)
     uris: dict[Path, str] = {}
     sections = []
@@ -119,13 +147,17 @@ def build_context(vdir: Path, cfg: Config) -> dict:
                 for kk, k in enumerate(nt.get("key_points", []), 1)
                 for c in [_check(vmap.get((i, f"key_point:{kk}")))]],
             "candidates": cands,
+            "ablation": _ablation_view(amap.get(i), nt, best is not None) if not r.get("failed") else None,
         })
+        if sections[-1]["ablation"]:
+            abl_rows.append(sections[-1]["ablation"]["cmp"])
     return {
         "meta": meta, "outline": outline, "sections": sections, "timestamps": timestamps,
         "model": stats.get("model", cfg.model), "stats": stats, "repo_url": REPO_URL,
         "n_frames": stats.get("n_frames"), "n_img_formulas": n_img_formulas,
         "n_seen": sum(len(s["candidates"]) for s in sections),
         "verification": verification,
+        "ablation_totals": _ablation_totals(abl_rows, len(sections), ablation) if ablation else None,
         "lang": stats.get("lang", cfg.lang),
     }
 

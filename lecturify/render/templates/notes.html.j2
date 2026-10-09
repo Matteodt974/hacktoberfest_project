@@ -72,6 +72,14 @@ figure.main figcaption b{color:var(--ink)}
 .keys ul{margin:0;padding-left:20px}
 details.saw{margin-top:20px;border-top:1px dashed var(--rule);padding-top:12px;font:14px var(--sans)}
 details.saw summary{cursor:pointer;font-weight:600;color:var(--img)}
+details.ablation{margin-top:12px;border-top:1px dashed var(--rule);padding-top:12px;font:14px var(--sans)}
+details.ablation summary{cursor:pointer;font-weight:600;color:var(--tr)}
+.abl-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:12px 0}
+.abl-stats div{background:var(--tr-soft);border-radius:8px;padding:8px 12px}
+.abl-stats b{display:block;font-size:20px;color:var(--ink)}
+.abl-stats .win{background:var(--img-soft)}.abl-stats .win b{color:var(--img)}
+.abl-body{border-left:3px solid var(--tr-soft);padding-left:14px;font:15px/1.6 var(--serif);color:#3a3a3a}
+.abl-body h4{font-family:var(--sans)}
 .saw .why{margin:10px 0;color:var(--ink)}
 .thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
 .thumb{position:relative;margin:0;border:2px solid transparent;border-radius:6px;overflow:hidden;opacity:.75}
@@ -86,7 +94,7 @@ footer{border-top:1px solid var(--rule);margin-top:40px;padding-top:16px;font:13
 /* ---------- slides mode: one section per screen ---------- */
 body.slides{overflow:hidden;background:#fff}
 body.slides .toolbar .hide-in-slides, body.slides header.course, body.slides nav.toc, body.slides footer,
-body.slides .proof, body.slides details.saw{display:none}
+body.slides .proof, body.slides details.saw, body.slides details.ablation{display:none}
 body.slides .wrap{max-width:none;padding:0}
 body.slides section.card{display:none;position:fixed;inset:44px 0 0 0;margin:0;border:0;border-radius:0;
   padding:3vh 5vw;overflow:auto;font-size:clamp(16px,1.5vw,22px)}
@@ -103,7 +111,7 @@ body.slides .slide-count{display:inline}
 /* ---------- print / PDF ---------- */
 @media print{
   body{background:#fff;font-size:11.5pt}
-  .toolbar,details.saw,.proof{display:none !important}
+  .toolbar,details.saw,details.ablation,.proof{display:none !important}
   .wrap{max-width:none;padding:0}
   section.card{border:0;padding:0;break-before:page;page-break-before:always}
   figure.main img{max-height:9cm;object-fit:contain}
@@ -131,7 +139,7 @@ body.slides .slide-count{display:inline}
   {% if outline.prerequisites %}<p class="prereq"><b>Prerequisites:</b> {{ outline.prerequisites | join(" · ") }}</p>{% endif %}
 </header>
 
-<p class="proof">👁 Gemma 4 looked at {{ n_seen }} frames{% if n_frames %} (out of {{ n_frames }} extracted){% endif %}, chose one figure per section and read {{ n_img_formulas }} formula{{ 's' if n_img_formulas != 1 }} directly from the images. Open “What Gemma saw” under each section.{% if verification %}<br>✓ Chain-of-Verification: <b>{{ verification.counts.verified }} verified</b>, {{ verification.counts.corrected }} corrected, {{ verification.counts.doubtful }} doubtful or not stated in the source — each formula and key point was re-checked by an independent Gemma call that saw only the source frame and transcript, not the draft (hover a badge for the question and answer).{% endif %}</p>
+<p class="proof">👁 Gemma 4 looked at {{ n_seen }} frames{% if n_frames %} (out of {{ n_frames }} extracted){% endif %}, chose one figure per section and read {{ n_img_formulas }} formula{{ 's' if n_img_formulas != 1 }} directly from the images. Open “What Gemma saw” under each section.{% if verification %}<br>✓ Chain-of-Verification: <b>{{ verification.counts.verified }} verified</b>, {{ verification.counts.corrected }} corrected, {{ verification.counts.doubtful }} doubtful or not stated in the source — each formula and key point was re-checked by an independent Gemma call that saw only the source frame and transcript, not the draft (hover a badge for the question and answer).{% endif %}{% if ablation_totals %}{% set a = ablation_totals %}<br>🙈 Ablation — same model, same prompt, transcript only, <b>no images</b> ({{ a.compared }}/{{ a.sections }} sections): {{ a.formulas_without }} formula{{ 's' if a.formulas_without != 1 }} instead of {{ a.formulas_with }}, and <b>{{ a.only_with_image }} formula{{ 's' if a.only_with_image != 1 }} exist only because Gemma read them on the frames</b>; {{ a.figures }} figure{{ 's' if a.figures != 1 }} chosen vs none. Open “🙈 Without the images” under each section to compare.{% if not timestamps %} (Screenshots mode: section titles come from the image-grouping step.){% endif %}{% endif %}</p>
 
 <nav class="toc"><b>Contents</b>
 <ol>{% for s in sections %}<li><a href="#{{ s.id }}">{{ s.title }}</a>{% if s.start %}<span class="ts">{{ s.start }}</span>{% endif %}</li>{% endfor %}</ol>
@@ -178,6 +186,24 @@ body.slides .slide-count{display:inline}
       {% endfor %}
     </div>
   </details>
+
+  {% if s.ablation %}{% set c = s.ablation.cmp %}
+  <details class="ablation">
+    <summary>🙈 Without the images — same model, transcript only: {{ c.formulas_without }} formula{{ 's' if c.formulas_without != 1 }} instead of {{ c.formulas_with }}</summary>
+    <div class="abl-stats">
+      <div class="win"><b>{{ c.only_with_image }}</b>formula{{ 's' if c.only_with_image != 1 }} only found by looking at the frames</div>
+      <div class="{{ 'win' if c.figure }}"><b>{{ '1 vs 0' if c.figure else '0 vs 0' }}</b>figure chosen</div>
+      <div><b>{{ c.formulas_with }} / {{ c.formulas_without }}</b>formulas with / without images</div>
+      <div><b>{{ c.words_with }} / {{ c.words_without }}</b>words with / without images</div>
+      {% if c.only_without %}<div><b>{{ c.only_without }}</b>formula{{ 's' if c.only_without != 1 }} only in the text-only notes</div>{% endif %}
+    </div>
+    <div class="abl-body">
+      {% if s.ablation.formulas %}<div class="formula-list">{% for f in s.ablation.formulas %}<div class="formula tr{{ ' wide' if f|length > 34 }}"><div class="tex">$$ {{ f }} $$</div></div>{% endfor %}</div>{% else %}<p><i>No formula without the images.</i></p>{% endif %}
+      {{ s.ablation.notes_html }}
+      {% if s.ablation.key_points %}<ul>{% for k in s.ablation.key_points %}<li>{{ k }}</li>{% endfor %}</ul>{% endif %}
+    </div>
+  </details>
+  {% endif %}
 </section>
 {% endfor %}
 
