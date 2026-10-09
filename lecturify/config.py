@@ -49,6 +49,7 @@ class Config:
     thinking_notes: str = "high"
 
     force: bool = False
+    verify: bool = False  # Pass 3: Chain-of-Verification
 
     @property
     def language_name(self) -> str:

@@ -41,3 +41,4 @@ h2{font:700 1.3em var(--serif);margin:0 0 12px}
 .strip{display:flex;gap:6px;overflow-x:auto;padding:10px 0}.strip img{height:68px;border-radius:4px;flex:none}
 .bar{height:6px;background:var(--rule);border-radius:3px;overflow:hidden;margin-top:6px}.bar i{display:block;height:100%;background:var(--accent);width:0;transition:width .4s}
 footer{font-size:13px;color:var(--muted);margin-top:40px;border-top:1px solid var(--rule);padding-top:14px}
+label.check{display:flex;gap:8px;align-items:center;font-weight:500;margin-top:14px}label.check input{width:auto}label.check .hint{margin:0}

@@ -147,3 +147,18 @@ Decisions, discoveries and pitfalls, in chronological order.
   2. the existing LLM "repair" round; 3. one fresh attempt with the original prompt.
 - If a section still fails, `make_notes` writes a placeholder section (`"failed": true`, the outline summary + an
   explanation) and the run completes; the next run regenerates only failed sections. Unit-tested with a fake client.
+
+## M8 — Chain-of-Verification (stretch, done)
+- `pipeline/verify.py`, factored CoVe per Dhuliawala et al. 2023 (arXiv:2309.11495): **plan** (one question per
+  formula and key point; the prompt forbids putting the draft's answer in the question) → **execute**, each question
+  in a separate call with only the source frame (the formula's `image_index`, else the chosen figure) + transcript,
+  never the draft (unit test asserts the draft text never reaches an answer prompt) → **revise**, verified /
+  corrected / doubtful. Plan and answers use `thinking="minimal"`, revise uses `"high"`.
+- Flag `--verify` (CLI `run` / `images`), checkbox in the web UI, extra progress step. Output `verification.json`.
+- Render: ✓ / ✎ / ⚠ badges next to formulas and key points (tooltip = question + independent answer + note),
+  corrected formulas show the draft reading underneath, global counter in the header.
+- Bugs on the first real run: Gemma answers `"answer": null` when it finds nothing (schema rejected it) and one bad
+  answer failed the whole section → `null` accepted, a failed question counts as "not found".
+- Calculus slides result: **all 7 formulas verified**, 1 key point reworded, 6 key points "doubtful" because they
+  contain general knowledge absent from the slides (e.g. "the gradient points to the steepest ascent"). Those are
+  labeled **"not in source"**, which is honest and is exactly what CoVe is for.

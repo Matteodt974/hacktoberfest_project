@@ -20,6 +20,7 @@
       <div><label for="lang">Notes language</label><select id="lang" name="lang"><option value="en">English</option><option value="fr">Français</option></select></div>
       <div><label for="model">Model</label><select id="model" name="model">{% for m in models %}<option>{{ m }}</option>{% endfor %}</select></div>
     </div>
+    <label class="check"><input type="checkbox" name="verify" value="1"> Verify formulas &amp; key points with Chain-of-Verification <span class="hint">(≈2× slower)</span></label>
     <button class="go">Generate notes</button>
     <p class="hint">The video needs subtitles. ~3–6 min for a 10-min video. Everything is cached: a second run is instant.</p>
   </form>
@@ -32,6 +33,7 @@
       <div><label for="lang2">Notes language</label><select id="lang2" name="lang"><option value="en">English</option><option value="fr">Français</option></select></div>
       <div><label for="model2">Model</label><select id="model2" name="model">{% for m in models %}<option>{{ m }}</option>{% endfor %}</select></div>
     </div>
+    <label class="check"><input type="checkbox" name="verify" value="1"> Verify formulas &amp; key points with Chain-of-Verification <span class="hint">(≈2× slower)</span></label>
     <button class="go">Generate notes</button>
   </form>
 </div>

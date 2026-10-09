@@ -53,6 +53,21 @@ def strip_leading_title(md: str, title: str) -> str:
     return md
 
 
+_CHECK = {"verified": ("✓", "verified"), "corrected": ("✎", "corrected"), "doubtful": ("⚠", "doubtful")}
+
+
+def _check(item: dict | None) -> dict:
+    """Display info for one CoVe result (empty when verification was not run)."""
+    if not item:
+        return {"status": None, "icon": "", "label": "", "tip": "", "correction": None}
+    icon, label = _CHECK.get(item["status"], ("⚠", "doubtful"))
+    if item["status"] == "doubtful" and item.get("answer") == "not found":
+        label = "not in source"  # often true general knowledge, but the video/slides don't state it
+    tip = f"Q: {item.get('question', '')}\nIndependent answer: {item.get('answer', '')}\n{item.get('note', '')}"
+    return {"status": item["status"], "icon": icon, "label": label, "tip": tip.strip(),
+            "correction": item.get("correction") if item["status"] == "corrected" else None}
+
+
 def _data_uri(path: Path, cache: dict[Path, str]) -> str:
     if path not in cache:
         mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
@@ -65,6 +80,8 @@ def build_context(vdir: Path, cfg: Config) -> dict:
     outline = json.loads((vdir / "outline.json").read_text())
     notes = {r["index"]: r for r in json.loads((vdir / "notes.json").read_text())}
     stats = json.loads((vdir / "stats.json").read_text()) if (vdir / "stats.json").exists() else {}
+    verification = json.loads((vdir / "verification.json").read_text()) if (vdir / "verification.json").exists() else None
+    vmap = {(sec["index"], it["target"]): it for sec in (verification or {}).get("sections", []) for it in sec["items"]}
     timestamps = not meta.get("images_mode", False)
     uris: dict[Path, str] = {}
     sections = []
@@ -80,13 +97,14 @@ def build_context(vdir: Path, cfg: Config) -> dict:
                           "chosen": j == nt["best_image"]})
         best = cands[nt["best_image"] - 1] if cands else None
         formulas = []
-        for f in nt["formulas"]:
+        for fk, f in enumerate(nt["formulas"], 1):
+            check = _check(vmap.get((i, f"formula:{fk}")))
             from_img = f["source"] == "image"
             n_img_formulas += from_img
             badge = (f"read from image {f['image_index']}" if from_img and f.get("image_index")
                      else "read from an image" if from_img else "from transcript")
-            formulas.append({"latex": f["latex"], "meaning": f.get("meaning", ""), "from_image": from_img,
-                             "badge": badge})
+            formulas.append({"latex": check["correction"] or f["latex"], "original": f["latex"],
+                             "meaning": f.get("meaning", ""), "from_image": from_img, "badge": badge, "check": check})
         sections.append({
             "n": i + 1, "id": f"s{i + 1}", "title": sec["title"],
             "start": mmss(sec["start_s"]) if timestamps else "", "end": mmss(sec["end_s"]) if timestamps else "",
@@ -95,8 +113,11 @@ def build_context(vdir: Path, cfg: Config) -> dict:
             "figure": best, "caption": nt.get("figure_caption", ""), "reason": nt.get("image_choice_reason", ""),
             "formulas": formulas,
             "notes_html": Markup(markdown_with_math(strip_leading_title(nt["notes_markdown"], sec["title"]))),
-            "key_points": [Markup(markdown_with_math(k).strip().removeprefix("<p>").removesuffix("</p>"))
-                           for k in nt.get("key_points", [])],
+            "key_points": [
+                {"html": Markup(markdown_with_math(c["correction"] or k).strip().removeprefix("<p>").removesuffix("</p>")),
+                 "check": c, "original": k}
+                for kk, k in enumerate(nt.get("key_points", []), 1)
+                for c in [_check(vmap.get((i, f"key_point:{kk}")))]],
             "candidates": cands,
         })
     return {
@@ -104,6 +125,7 @@ def build_context(vdir: Path, cfg: Config) -> dict:
         "model": stats.get("model", cfg.model), "stats": stats, "repo_url": REPO_URL,
         "n_frames": stats.get("n_frames"), "n_img_formulas": n_img_formulas,
         "n_seen": sum(len(s["candidates"]) for s in sections),
+        "verification": verification,
         "lang": stats.get("lang", cfg.lang),
     }
 

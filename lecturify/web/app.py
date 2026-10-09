@@ -31,6 +31,7 @@ class Job:
     result_id: str | None = None
     frames_preview: list[tuple[str, str]] = field(default_factory=list)  # (item_id, file name)
     steps_done: list[str] = field(default_factory=list)
+    verify: bool = False
 
     def as_dict(self) -> dict:
         return {
@@ -82,7 +83,8 @@ def create_app(cfg: Config | None = None) -> Flask:
         model = form.get("model", DEFAULT_MODEL)
         lang = form.get("lang", "en")
         return Config(model=model if model in SUPPORTED_MODELS else DEFAULT_MODEL,
-                      lang=lang if lang in ("en", "fr") else "en", data_dir=base_cfg.data_dir)
+                      lang=lang if lang in ("en", "fr") else "en", data_dir=base_cfg.data_dir,
+                      verify=bool(form.get("verify")))
 
     def start(job: Job, target) -> None:
         def progress(step: str, message: str = "", **extra) -> None:
@@ -123,7 +125,7 @@ def create_app(cfg: Config | None = None) -> Flask:
                                    error="Paste a YouTube URL."), 400
         jcfg = job_cfg(request.form)
         jcfg.force = bool(request.form.get("force"))
-        job = Job(id=uuid.uuid4().hex[:10], kind="video")
+        job = Job(id=uuid.uuid4().hex[:10], kind="video", verify=jcfg.verify)
         JOBS[job.id] = job
         start(job, lambda p: run_video(url, jcfg, p))
         return redirect(url_for("job_view", job_id=job.id))
@@ -139,7 +141,7 @@ def create_app(cfg: Config | None = None) -> Flask:
         blobs = [(f.filename, f.read()) for f in files]
         jcfg = job_cfg(request.form)
         title, context = request.form.get("title", "").strip(), request.form.get("context", "").strip()
-        job = Job(id=uuid.uuid4().hex[:10], kind="images", step="frames")
+        job = Job(id=uuid.uuid4().hex[:10], kind="images", step="frames", verify=jcfg.verify)
         JOBS[job.id] = job
         start(job, lambda p: run_images(blobs, jcfg, title=title, context=context, progress=p))
         return redirect(url_for("job_view", job_id=job.id))
@@ -152,7 +154,8 @@ def create_app(cfg: Config | None = None) -> Flask:
     @app.get("/jobs/<job_id>/view")
     def job_view(job_id: str):
         job = JOBS.get(job_id) or abort(404)
-        steps = [(s, STEP_LABELS[s]) for s in STEPS if not (job.kind == "images" and s in ("download", "transcript"))]
+        steps = [(s, STEP_LABELS[s]) for s in STEPS
+                 if not (job.kind == "images" and s in ("download", "transcript")) and (s != "verify" or job.verify)]
         return render_template("progress.html", job=job, steps=steps)
 
     @app.get("/notes/<item_id>")

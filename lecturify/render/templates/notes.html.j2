@@ -61,6 +61,9 @@ figure.main figcaption b{color:var(--ink)}
 .badge{font:600 11px var(--sans);padding:2px 8px;border-radius:99px;white-space:nowrap}
 .badge.img{background:var(--img-soft);color:var(--img)}
 .badge.tr{background:var(--tr-soft);color:var(--tr)}
+.badge.v-verified{background:#e5f2ea;color:#2c6e49}.badge.v-corrected{background:#fff4d6;color:#8a5a00}
+.badge.v-doubtful{background:#fbe9e9;color:#a4161a}.badge[title]{cursor:help}
+.was{font:12px var(--sans);color:var(--muted);margin-top:2px}.was code{font-size:11px}
 .notes{margin-top:18px}
 .notes h3,.notes h4{font-family:var(--sans);font-size:1em;margin:1.2em 0 .3em}
 .notes p{margin:.6em 0}
@@ -128,7 +131,7 @@ body.slides .slide-count{display:inline}
   {% if outline.prerequisites %}<p class="prereq"><b>Prerequisites:</b> {{ outline.prerequisites | join(" · ") }}</p>{% endif %}
 </header>
 
-<p class="proof">👁 Gemma 4 looked at {{ n_seen }} frames{% if n_frames %} (out of {{ n_frames }} extracted){% endif %}, chose one figure per section and read {{ n_img_formulas }} formula{{ 's' if n_img_formulas != 1 }} directly from the images. Open “What Gemma saw” under each section.</p>
+<p class="proof">👁 Gemma 4 looked at {{ n_seen }} frames{% if n_frames %} (out of {{ n_frames }} extracted){% endif %}, chose one figure per section and read {{ n_img_formulas }} formula{{ 's' if n_img_formulas != 1 }} directly from the images. Open “What Gemma saw” under each section.{% if verification %}<br>✓ Chain-of-Verification: <b>{{ verification.counts.verified }} verified</b>, {{ verification.counts.corrected }} corrected, {{ verification.counts.doubtful }} doubtful or not stated in the source — each formula and key point was re-checked by an independent Gemma call that saw only the source frame and transcript, not the draft (hover a badge for the question and answer).{% endif %}</p>
 
 <nav class="toc"><b>Contents</b>
 <ol>{% for s in sections %}<li><a href="#{{ s.id }}">{{ s.title }}</a>{% if s.start %}<span class="ts">{{ s.start }}</span>{% endif %}</li>{% endfor %}</ol>
@@ -152,7 +155,8 @@ body.slides .slide-count{display:inline}
     {% for f in s.formulas %}
     <div class="formula {{ 'img' if f.from_image else 'tr' }}">
       <div class="tex">$$ {{ f.latex }} $$</div>
-      <div class="meta"><span class="badge {{ 'img' if f.from_image else 'tr' }}">{{ '👁 ' if f.from_image else '🗒 ' }}{{ f.badge }}</span>{{ f.meaning }}</div>
+      <div class="meta"><span class="badge {{ 'img' if f.from_image else 'tr' }}">{{ '👁 ' if f.from_image else '🗒 ' }}{{ f.badge }}</span>{% if f.check.status %}<span class="badge v-{{ f.check.status }}" title="{{ f.check.tip }}">{{ f.check.icon }} {{ f.check.label }}</span>{% endif %}{{ f.meaning }}</div>
+      {% if f.check.correction %}<div class="was">Draft read: <code>{{ f.original }}</code></div>{% endif %}
     </div>
     {% endfor %}
   </div></div>
@@ -161,7 +165,7 @@ body.slides .slide-count{display:inline}
   <div class="notes">{{ s.notes_html }}</div>
 
   {% if s.key_points %}
-  <div class="keys"><h3>Key points</h3><ul>{% for k in s.key_points %}<li>{{ k }}</li>{% endfor %}</ul></div>
+  <div class="keys"><h3>Key points</h3><ul>{% for k in s.key_points %}<li>{{ k.html }}{% if k.check.status %} <span class="badge v-{{ k.check.status }}" title="{{ k.check.tip }}">{{ k.check.icon }} {{ k.check.label }}</span>{% endif %}</li>{% endfor %}</ul></div>
   {% endif %}
   </div>
 

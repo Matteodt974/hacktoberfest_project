@@ -95,3 +95,58 @@ Return ONLY a JSON object with exactly this shape:
   "sections": [{{"title": string, "image_indices": [integer], "summary": string, "key_concepts": [string]}}]
 }}
 """
+
+# ---------------------------------------------------------------- CoVe (Chain-of-Verification)
+VERIFY_SYSTEM = (
+    "You are a meticulous fact-checker for university course notes. You only trust what is visible in the given "
+    "image or stated in the given transcript."
+)
+
+VERIFY_PLAN = """Below is a DRAFT of course notes for one section of a lecture. For EACH formula and EACH key point,
+write ONE verification question that a checker can answer by looking only at the source image and transcript.
+
+Rules:
+- The question must NOT contain the draft's answer (never copy the formula or the claim into the question).
+  Good: "Which formula giving the derivative of a composite function is written on the image? Transcribe it in LaTeX."
+  Bad: "Is the chain rule d/dx g(h(x)) = g'(h(x))h'(x)?"
+- For a formula, ask for the exact transcription of what is displayed.
+- For a key point, ask the factual question whose answer would confirm or refute it.
+- Use the exact target ids given below.
+
+DRAFT:
+{draft}
+
+Return ONLY a JSON object: {{"questions": [{{"target": string, "question": string}}]}}
+"""
+
+VERIFY_ANSWER = """Answer the question using ONLY the image above and the transcript below. Do not guess.
+If the information is not in the image or the transcript, set "found" to false.
+If the answer is a formula, put its exact LaTeX in "latex" (every backslash written as TWO backslashes in JSON).
+
+TRANSCRIPT:
+{transcript}
+
+QUESTION: {question}
+
+Return ONLY a JSON object: {{"found": boolean, "answer": string, "latex": string | null}}
+"""
+
+VERIFY_REVISE = """You are given a DRAFT of course notes and independent VERIFICATION answers obtained from the source
+image and transcript only (the verifier never saw the draft).
+
+For each target, decide:
+- "verified": the verification answer agrees with the draft (same formula up to notation, same fact);
+- "corrected": the verification answer clearly contradicts the draft and is itself specific; give the corrected LaTeX
+  (formula) or corrected sentence (key point) in "correction";
+- "doubtful": the verifier could not find it, or the evidence is ambiguous.
+Add a short "note" (one sentence) explaining your decision.
+
+DRAFT:
+{draft}
+
+VERIFICATION:
+{qa}
+
+Return ONLY a JSON object: {{"items": [{{"target": string, "status": "verified" | "corrected" | "doubtful",
+"correction": string | null, "note": string}}]}} with one item per target: {targets}
+"""

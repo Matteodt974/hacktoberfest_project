@@ -10,6 +10,7 @@ from typing import Callable, Protocol
 from ..config import Config
 from ..ingest import frames as frames_mod
 from ..ingest import youtube
+from ..ingest.youtube import transcript_for_llm
 from ..llm.client import GemmaClient
 from ..render.html import render
 from .notes import make_notes
@@ -17,10 +18,11 @@ from .outline import make_outline
 
 log = logging.getLogger(__name__)
 
-STEPS = ["download", "transcript", "frames", "outline", "notes", "render"]
+STEPS = ["download", "transcript", "frames", "outline", "notes", "verify", "render"]
 STEP_LABELS = {
     "download": "Download", "transcript": "Subtitles", "frames": "Frame extraction",
-    "outline": "Structure (Gemma)", "notes": "Section notes (Gemma, multimodal)", "render": "Render",
+    "outline": "Structure (Gemma)", "notes": "Section notes (Gemma, multimodal)",
+    "verify": "Verification (Gemma, Chain-of-Verification)", "render": "Render",
 }
 
 
@@ -41,6 +43,15 @@ def save_stats(vdir: Path, client: GemmaClient | None, cfg: Config, n_frames: in
     if client and (client.stats.calls or client.stats.cache_hits or not prev):
         stats.update(client.stats.as_dict(), model=cfg.model, wall_s=round(time.time() - t0, 1))
     path.write_text(json.dumps(stats, indent=2))
+
+
+def run_verify(vdir: Path, notes: list[dict], context_for, client: GemmaClient, cfg: Config,
+               progress: Progress) -> None:
+    from .verify import verify_notes
+
+    progress("verify", f"0 / {len(notes)}", done=0, total=len(notes))
+    verify_notes(vdir, notes, context_for, client, cfg,
+                 progress=lambda k, n: progress("verify", f"{k} / {n}", done=k, total=n))
 
 
 def run_video(url: str, cfg: Config, progress: Progress = _noop) -> Path:
@@ -68,8 +79,12 @@ def _llm_and_render(vid, vdir, meta, cues, frames, cfg: Config, progress: Progre
     outline = make_outline(vid, meta, cues, client, cfg)
     progress("outline", f"{len(outline.sections)} sections")
     progress("notes", f"0 / {len(outline.sections)}", done=0, total=len(outline.sections))
-    make_notes(vid, outline, cues, frames, client, cfg,
-               progress=lambda k, n: progress("notes", f"{k} / {n}", done=k, total=n))
+    notes = make_notes(vid, outline, cues, frames, client, cfg,
+                       progress=lambda k, n: progress("notes", f"{k} / {n}", done=k, total=n))
+    if cfg.verify:
+        run_verify(vdir, notes, lambda r: transcript_for_llm(cues, outline.sections[r["index"]].start_s,
+                                                             outline.sections[r["index"]].end_s),
+                   client, cfg, progress)
     save_stats(vdir, client, cfg, len(frames), t0)
     progress("render", "Rendering HTML…")
     out = render(vdir, cfg)

@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> None:
     _common(p)
     p.add_argument("--max-images", type=int, default=6)
     p.add_argument("--force", action="store_true", help="recompute every step (LLM calls stay cached)")
+    p.add_argument("--verify", action="store_true", help="Pass 3: Chain-of-Verification of formulas and key points")
 
     p = sub.add_parser("render", help="re-render data/<video_id>/output.html offline from cached JSON")
     p.add_argument("video_id")
@@ -38,6 +39,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("paths", nargs="+", type=Path)
     p.add_argument("--title", default="")
     p.add_argument("--context-file", type=Path)
+    p.add_argument("--verify", action="store_true", help="Pass 3: Chain-of-Verification")
     _common(p)
 
     p = sub.add_parser("web", help="start the web UI")
@@ -71,7 +73,7 @@ def main(argv: list[str] | None = None) -> None:
 
     args = ap.parse_args(argv)
     cfg = Config(model=getattr(args, "model", DEFAULT_MODEL), lang=getattr(args, "lang", "en"),
-                 force=getattr(args, "force", False))
+                 force=getattr(args, "force", False), verify=getattr(args, "verify", False))
     if getattr(args, "motion_threshold", None):
         cfg.motion_threshold = args.motion_threshold
 

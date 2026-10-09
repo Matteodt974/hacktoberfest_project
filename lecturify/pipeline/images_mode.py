@@ -17,7 +17,7 @@ from ..llm.client import GemmaClient, Image
 from ..llm.schemas import CourseOutline, ImagesOutline, SectionOutline
 from ..render.html import render
 from .notes import section_notes
-from .run import Progress, _noop, save_stats
+from .run import Progress, _noop, run_verify, save_stats
 
 log = logging.getLogger(__name__)
 
@@ -120,6 +120,8 @@ def run_images(blobs: list[tuple[str, bytes]], cfg: Config, *, title: str = "", 
     with ThreadPoolExecutor(max_workers=cfg.concurrency) as ex:
         results = list(ex.map(work, range(n)))
     (vdir / "notes.json").write_text(json.dumps(results, indent=1, ensure_ascii=False))
+    if cfg.verify:
+        run_verify(vdir, results, lambda r: context[:6000], client, cfg, progress)
     save_stats(vdir, client, cfg, k, t0)
     progress("render", "Rendering HTML…")
     out = render(vdir, cfg)
