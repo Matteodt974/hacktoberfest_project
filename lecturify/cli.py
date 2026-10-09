@@ -95,6 +95,6 @@ def _dispatch(args, cfg: Config) -> None:
         out = cfg.data_dir / f"{args.video_id}_bundle.zip"
         with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
             for f in sorted(vdir.rglob("*")):
-                if f.is_file() and f.name != "video.mp4" and not f.name.startswith("subs."):
+                if f.is_file() and f.suffix not in (".mp4", ".webm", ".mkv") and not f.name.startswith("subs."):
                     z.write(f, f.relative_to(cfg.data_dir))
         print(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB)")

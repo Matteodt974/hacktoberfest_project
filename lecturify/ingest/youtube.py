@@ -91,7 +91,8 @@ def download_video(video_id: str, cfg: Config) -> Path:
         "quiet": True,
         "no_warnings": True,
         # video only is enough (no audio sent to Gemma); <=720p; prefer mp4
-        "format": "bv*[height<=720][ext=mp4]/bv*[height<=720]/b[height<=720]/b",
+        # Prefer H.264: OpenCV wheels often cannot decode AV1 (frames.ensure_decodable transcodes as a fallback)
+        "format": "bv*[height<=720][vcodec^=avc1]/bv*[height<=720][ext=mp4]/bv*[height<=720]/b[height<=720]/b",
         "outtmpl": str(vdir / "video.%(ext)s"),
         "merge_output_format": "mp4",
     }

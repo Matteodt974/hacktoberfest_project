@@ -65,3 +65,8 @@ Decisions, discoveries and pitfalls, in chronological order.
 - Synthetic test (`scripts/make_synthetic_video.py`, 66 s, 3B1B-like dark background, 6 animate-then-hold scenes,
   1 always-moving wave, 1 black screen): **6 frames kept, exactly one per hold, all complete drawings**;
   wave and black screen rejected.
+- **Bug found on Matteo's laptop:** `No frames could be read from the video`. Root cause reproduced here: YouTube
+  serves many 720p video-only streams as **AV1**; OpenCV wheels open the file but cannot decode a single frame.
+  Fix: (1) yt-dlp format now prefers H.264 (`vcodec^=avc1`); (2) `frames.ensure_decodable` transcodes to H.264
+  (`video_h264.mp4`) with the static ffmpeg shipped by `imageio-ffmpeg` (new dependency, no system ffmpeg needed).
+  Verified: the synthetic video re-encoded to AV1 → same 6 frames. `bundle` now skips every video file.

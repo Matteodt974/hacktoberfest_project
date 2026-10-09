@@ -49,6 +49,44 @@ def _phash(gray_small: np.ndarray) -> imagehash.ImageHash:
     return imagehash.phash(PILImage.fromarray(gray_small))
 
 
+def _fourcc(video: Path) -> str:
+    cap = cv2.VideoCapture(str(video))
+    code = int(cap.get(cv2.CAP_PROP_FOURCC) or 0)
+    cap.release()
+    return code.to_bytes(4, "little").decode("ascii", "replace").strip("\x00") or "?"
+
+
+def _decodable(video: Path) -> bool:
+    cap = cv2.VideoCapture(str(video))
+    ok = cap.isOpened() and cap.grab()
+    cap.release()
+    return bool(ok)
+
+
+def ensure_decodable(video: Path) -> Path:
+    """OpenCV wheels often can't decode AV1 (YouTube's default for many videos): transcode to H.264 if needed.
+
+    Uses the static ffmpeg bundled with `imageio-ffmpeg`, so no system ffmpeg is required.
+    """
+    if _decodable(video):
+        return video
+    h264 = video.with_name("video_h264.mp4")
+    if h264.exists() and _decodable(h264):
+        return h264
+    codec = _fourcc(video)
+    log.warning("OpenCV cannot decode %s (codec %s); transcoding to H.264 with ffmpeg...", video.name, codec)
+    import subprocess
+
+    import imageio_ffmpeg
+
+    cmd = [imageio_ffmpeg.get_ffmpeg_exe(), "-y", "-loglevel", "error", "-i", str(video), "-an",
+           "-vf", "scale=-2:'min(720,ih)'", "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", str(h264)]
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0 or not _decodable(h264):
+        raise RuntimeError(f"Cannot decode video (codec {codec}) and ffmpeg transcoding failed: {res.stderr[-400:]}")
+    return h264
+
+
 def sample_video(video: Path, cfg: Config) -> list[Sample]:
     cap = cv2.VideoCapture(str(video))
     if not cap.isOpened():
@@ -188,10 +226,10 @@ def extract_frames(video_id: str, cfg: Config) -> list[dict]:
     out_json = vdir / "frames.json"
     if out_json.exists() and not cfg.force:
         return json.loads(out_json.read_text())
-    video = vdir / "video.mp4"
+    video = ensure_decodable(vdir / "video.mp4")
     samples = sample_video(video, cfg)
     if not samples:
-        raise RuntimeError("No frames could be read from the video.")
+        raise RuntimeError(f"No frames could be read from {video.name} (codec {_fourcc(video)}).")
     log.info(_motion_report(samples))
 
     thr, min_edge = cfg.motion_threshold, cfg.min_edge_density
