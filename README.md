@@ -2,8 +2,7 @@
 
 **Paste a YouTube lecture, get an illustrated course handout. Gemma 4 *watches* the video's frames, picks the best figure for each section and reads the formulas off the screen into LaTeX.**
 
-<p align="center"><img src="docs/screenshot.png" width="640" alt="A Lecturify section: the figure Gemma chose, formulas read from the slides with source and verification badges, notes, key points and the 'What Gemma saw' panel"></p>
-<p align="center"><sub>Real output (screenshots mode, 4 slides): formulas transcribed from the images by Gemma 4, each re-checked by Chain-of-Verification.</sub></p>
+**👉 [See a real example of what Lecturify generates](#example-output)**
 
 Built in one day at **Hacktoberfest Hack Day 2026 — UQAM × MLH**, for *Best Use of Gemma 4* and *Best Open-Source AI Project*.
 
@@ -142,6 +141,15 @@ Tests (offline, no network): `python -m pytest`.
 
 Hacktoberfest Hack Day 2026 — UQAM × MLH (Montréal), for **Best Use of Gemma 4** and **Best Open-Source AI Project**.
 Development log with every decision and pitfall: [DEVLOG.md](DEVLOG.md).
+
+## Example output
+
+What the code actually produces: one section of the generated handout (screenshots mode, 4 slides). The figure Gemma
+chose, the formulas it transcribed from the images (👁 source badge) and re-checked with Chain-of-Verification
+(✓ badge), the notes, the key points and the open "What Gemma saw" panel.
+
+<p align="center"><img src="docs/screenshot.png" width="640" alt="A Lecturify section: the figure Gemma chose, formulas read from the slides with source and verification badges, notes, key points and the 'What Gemma saw' panel"></p>
+<p align="center"><sub>Real output (screenshots mode, 4 slides): formulas transcribed from the images by Gemma 4, each re-checked by Chain-of-Verification.</sub></p>
 
 ## License
 
