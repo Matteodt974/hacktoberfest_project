@@ -162,3 +162,14 @@ Decisions, discoveries and pitfalls, in chronological order.
 - Calculus slides result: **all 7 formulas verified**, 1 key point reworded, 6 key points "doubtful" because they
   contain general knowledge absent from the slides (e.g. "the gradient points to the steepest ascent"). Those are
   labeled **"not in source"**, which is honest and is exactly what CoVe is for.
+- CoVe iteration on real output: the verifier said "not found" for true statements because (a) planned questions said
+  "according to the notes" (the verifier never sees them) and (b) key points were checked against the chosen figure
+  only. Fixes: plan prompt forbids referring to the notes; key-point questions get all the section's frames.
+  Result on the calculus slides: 9 verified, 0 corrected, 6 "not in source" (genuine additions absent from the slides).
+- Web flow with the CoVe checkbox verified in Chromium (progress shows the Verification step; 14 badges rendered).
+
+## M9 — README + submission
+- README: real screenshot (`docs/screenshot.png`, made from our own generated slides; no third-party video frames
+  committed), CoVe and screenshots mode documented, quickstart starts with `python -m lecturify web`, dependency
+  licenses (json-repair added), limitations incl. API instability.
+- The `mvp` tag exists locally on a46af87 but this environment can only push the branch (tag push → HTTP 403).

@@ -111,6 +111,8 @@ Rules:
   Bad: "Is the chain rule d/dx g(h(x)) = g'(h(x))h'(x)?"
 - For a formula, ask for the exact transcription of what is displayed.
 - For a key point, ask the factual question whose answer would confirm or refute it.
+- Ask about what the LECTURE shows or says (the slide, the figure, the speaker). Never mention "the notes",
+  "the draft" or "the summary": the checker has never seen them.
 - Use the exact target ids given below.
 
 DRAFT:
@@ -119,7 +121,7 @@ DRAFT:
 Return ONLY a JSON object: {{"questions": [{{"target": string, "question": string}}]}}
 """
 
-VERIFY_ANSWER = """Answer the question using ONLY the image above and the transcript below. Do not guess.
+VERIFY_ANSWER = """Answer the question using ONLY the image(s) above and the transcript below. Do not guess.
 If the information is not in the image or the transcript, set "found" to false.
 If the answer is a formula, put its exact LaTeX in "latex" (every backslash written as TWO backslashes in JSON).
 

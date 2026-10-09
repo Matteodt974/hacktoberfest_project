@@ -36,18 +36,15 @@ def draft_text(notes: dict) -> tuple[str, list[str]]:
     return "\n".join(lines), targets
 
 
-def _image_for(target: str, notes: dict, cands: list[dict]) -> dict | None:
-    """The frame a target should be checked against: the formula's source image, else the chosen figure."""
-    if not cands:
-        return None
+def _images_for(target: str, notes: dict, cands: list[dict]) -> list[dict]:
+    """Frames a target is checked against: a formula's source image; for a key point, all the section's frames."""
     if target.startswith("formula:"):
         k = int(target.split(":")[1]) - 1
         f = notes["formulas"][k] if k < len(notes["formulas"]) else {}
         idx = f.get("image_index")
         if idx and 1 <= idx <= len(cands):
-            return cands[idx - 1]
-    best = notes.get("best_image", 1)
-    return cands[best - 1] if 1 <= best <= len(cands) else cands[0]
+            return [cands[idx - 1]]
+    return list(cands)
 
 
 def verify_section(r: dict, context: str, vdir: Path, client: GemmaClient, cfg: Config) -> dict:
@@ -67,10 +64,9 @@ def verify_section(r: dict, context: str, vdir: Path, client: GemmaClient, cfg: 
     # 3. execute — factored: one independent call per question, no draft in the context
     def answer(tq: tuple[str, str]) -> tuple[str, str, VAnswer]:
         t, q = tq
-        frame = _image_for(t, notes, cands)
         parts: list = []
-        if frame:
-            parts += ["IMAGE:", Image.from_path(vdir / frame["file"])]
+        for k, frame in enumerate(_images_for(t, notes, cands), 1):
+            parts += [f"IMAGE {k}:", Image.from_path(vdir / frame["file"])]
         parts.append(prompts.VERIFY_ANSWER.format(transcript=context or "(none)", question=q))
         try:
             a = client.generate_json(task_name=f"cove:answer{i + 1}:{t}", system=prompts.VERIFY_SYSTEM, parts=parts,

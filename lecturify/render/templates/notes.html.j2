@@ -52,7 +52,7 @@ figure.main figcaption{font:14px/1.5 var(--sans);color:var(--muted);margin-top:8
 figure.main figcaption b{color:var(--ink)}
 .formulas{margin:22px 0 6px}
 .formula-list{display:flex;flex-wrap:wrap;gap:4px 18px}
-.formula-list .formula{flex:1 1 220px;min-width:0}
+.formula-list .formula{flex:1 1 220px;min-width:0}.formula-list .formula.wide{flex-basis:100%}
 .formulas h3,.keys h3{font:700 12px var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
 .formula{border-left:3px solid var(--rule);padding:6px 0 6px 14px;margin:8px 0}
 .formula.img{border-color:var(--img)}
@@ -153,7 +153,7 @@ body.slides .slide-count{display:inline}
   {% if s.formulas %}
   <div class="formulas"><h3>Formulas</h3><div class="formula-list">
     {% for f in s.formulas %}
-    <div class="formula {{ 'img' if f.from_image else 'tr' }}">
+    <div class="formula {{ 'img' if f.from_image else 'tr' }}{{ ' wide' if f.latex|length > 34 }}">
       <div class="tex">$$ {{ f.latex }} $$</div>
       <div class="meta"><span class="badge {{ 'img' if f.from_image else 'tr' }}">{{ '👁 ' if f.from_image else '🗒 ' }}{{ f.badge }}</span>{% if f.check.status %}<span class="badge v-{{ f.check.status }}" title="{{ f.check.tip }}">{{ f.check.icon }} {{ f.check.label }}</span>{% endif %}{{ f.meaning }}</div>
       {% if f.check.correction %}<div class="was">Draft read: <code>{{ f.original }}</code></div>{% endif %}
