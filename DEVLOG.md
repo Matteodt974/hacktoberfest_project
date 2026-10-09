@@ -88,3 +88,30 @@ Decisions, discoveries and pitfalls, in chronological order.
   85 s latency with `thinking_level="high"`.
 - Network: one `httpx.ReadError: Connection reset by peer` on the first try → transport errors are now retried
   like 429/5xx.
+
+## M4 — Pass 2 (multimodal notes)
+- One Gemma call per section: header → `Image k — t=mm:ss` + inline JPEG (≤ 6, one per time slice, highest edge
+  density) → section transcript → tasks + JSON shape. 3 sections in parallel.
+- Real run on the demo video: Gemma picked a figure per section with a sensible reason, and **read content off the
+  frames**: embedding vectors (`\begin{bmatrix} +1.0 \\ +4.3 …`) from 05:09, the arithmetic from the "1 billion
+  computations per second" frame, `\vec{E}_1 … \vec{E}_8` from the series end card.
+- v1 prompt over-transcribed (10 trivial additions, 12 near-identical vectors) and repeated the section title as `#`.
+  v2 prompt: "skip decorative numbers, 1–2 representative items for repeated ones, ≤ 6 formulas, no title heading".
+  Result: 0–3 meaningful formulas per section.
+- Observed: one response missing `notes_markdown` and one malformed JSON → the single repair round fixed both.
+- API instability is real (HTTP 500 bursts, `ReadError` connection resets, one call needed 4 attempts) →
+  retries 7, backoff capped at 30 s. Latency per multimodal call: 17–100 s with `thinking_level="high"`.
+
+## M5 — Render → CLI MVP
+- `render/html.py`: Markdown with math protected by placeholders (unit-tested: `a_1 … b_2` no italics, backslashes
+  kept, `<` escaped, `$5 … $10` not math), leading title heading stripped, frames inlined as base64 (2.5 MB file).
+- Template: header, TOC, one card per section (figure + caption, formulas with source badges, notes, key points,
+  "What Gemma saw" panel with candidates, chosen one highlighted + reason), slides mode (← → Esc), print CSS (one
+  section per page, panel hidden), footer with model + stats.
+- KaTeX: CDN (jsDelivr) in `output.html`; a vendored copy (`web/static/katex`, MIT, woff2 only, 612 KB, fetched from
+  the npm registry) for the web UI. `render(..., katex_base=...)` switches between them.
+- Stats: cached Gemma responses now store their cost (calls, latency, tokens) and replay it, so the footer shows what
+  produced the notes even on a cached rerun (older cache entries count 1 call, no latency).
+- Verified in headless Chromium: 7 formulas typeset, 0 KaTeX errors, figures and panel OK, slides OK.
+- `python -m lecturify run <url>` works fully offline once a video is cached (every step skips on its JSON);
+  rebuilding outline/notes from `llm_cache` reproduced `notes.json` byte for byte.

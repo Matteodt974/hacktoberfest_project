@@ -44,7 +44,7 @@ class Config:
     # LLM
     max_images_per_section: int = 6
     concurrency: int = 3
-    max_retries: int = 5
+    max_retries: int = 7
     thinking_outline: str = "high"
     thinking_notes: str = "high"
 

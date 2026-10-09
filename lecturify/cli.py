@@ -25,6 +25,15 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("smoke-test", help="check Gemma 4 access (text, image, JSON, multi-image)")
     _common(p)
 
+    p = sub.add_parser("run", help="full pipeline: YouTube URL (or cached video id) → output.html")
+    p.add_argument("url")
+    _common(p)
+    p.add_argument("--max-images", type=int, default=6)
+    p.add_argument("--force", action="store_true", help="recompute every step (LLM calls stay cached)")
+
+    p = sub.add_parser("render", help="re-render data/<video_id>/output.html offline from cached JSON")
+    p.add_argument("video_id")
+
     p = sub.add_parser("ingest", help="download metadata, transcript and video (needs YouTube access)")
     p.add_argument("url")
     _common(p)
@@ -71,6 +80,15 @@ def _dispatch(args, cfg: Config) -> None:
         from .smoke import run_smoke
         res = run_smoke(cfg)
         sys.exit(0 if all(v.get("ok", True) for v in res.values() if isinstance(v, dict) and "ok" in v) else 1)
+
+    elif args.cmd == "run":
+        from .pipeline.run import run_video
+        cfg.max_images_per_section = args.max_images
+        print(f"Notes: {run_video(args.url, cfg)}")
+
+    elif args.cmd == "render":
+        from .render.html import render
+        print(f"Notes: {render(cfg.video_dir(args.video_id), cfg)}")
 
     elif args.cmd == "ingest":
         from .ingest.youtube import ingest

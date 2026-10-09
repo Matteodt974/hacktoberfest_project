@@ -55,8 +55,11 @@ Tasks:
 2. Transcribe into LaTeX EVERY mathematical formula, equation or matrix that is visible in the images, exactly as
    displayed (source "image", with its image_index). You may also add a formula that is explicitly stated in the
    transcript (source "transcript", image_index null). Never add a formula that appears in neither.
-   If there is no formula at all, return an empty list.
+   Keep it meaningful: skip decorative or random-looking numbers, and when an image shows many similar items
+   (e.g. a row of vectors or a column of arithmetic), transcribe only 1–2 representative ones and say so in
+   "meaning". At most 6 formulas. If there is no formula at all, return an empty list.
 3. Write concise course notes (120–250 words) in the style of a university handout, in Markdown.
+   Do NOT repeat the section title as a heading; use at most "####" sub-headings, short paragraphs and lists.
    Refer to what the figures show when useful. Use $...$ for inline math and $$...$$ for display math.
 4. List 2–4 key takeaways.
 
