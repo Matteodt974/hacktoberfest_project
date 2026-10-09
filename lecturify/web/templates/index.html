@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecturify — lecture videos to illustrated notes</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}"></head>
+<body><div class="wrap">
+<div class="brand">Lecturify<span>.</span></div>
+<h1>Turn a lecture video into an illustrated handout.</h1>
+<p class="lede">Gemma 4 watches the video's frames, picks the best figure for each section, reads the formulas on screen into LaTeX and writes your course notes.</p>
+
+{% if error %}<div class="error">{{ error }}</div>{% endif %}
+<div class="panel">
+  <div class="tabs">
+    <button type="button" data-tab="yt" class="{{ '' if tab == 'images' else 'on' }}">▶ YouTube video</button>
+    <button type="button" data-tab="images" class="{{ 'on' if tab == 'images' else '' }}">🖼 My screenshots</button>
+  </div>
+  <form class="tab {{ '' if tab == 'images' else 'on' }}" id="tab-yt" method="post" action="{{ url_for('create_job') }}">
+    <label for="url">YouTube URL</label>
+    <input type="url" id="url" name="url" required placeholder="https://www.youtube.com/watch?v=…">
+    <div class="row">
+      <div><label for="lang">Notes language</label><select id="lang" name="lang"><option value="en">English</option><option value="fr">Français</option></select></div>
+      <div><label for="model">Model</label><select id="model" name="model">{% for m in models %}<option>{{ m }}</option>{% endfor %}</select></div>
+    </div>
+    <label class="check"><input type="checkbox" name="verify" value="1"> Verify formulas &amp; key points with Chain-of-Verification <span class="hint">(≈2× slower)</span></label>
+    <button class="go">Generate notes</button>
+    <p class="hint">The video needs subtitles. ~3–6 min for a 10-min video. Everything is cached: a second run is instant.</p>
+  </form>
+  <form class="tab {{ 'on' if tab == 'images' else '' }}" id="tab-images" method="post" action="{{ url_for('create_images_job') }}" enctype="multipart/form-data">
+    <label for="images">Screenshots, slides or whiteboard photos (1–20, in order)</label>
+    <input type="file" id="images" name="images" accept="image/*" multiple required>
+    <label for="title">Title (optional)</label><input type="text" id="title" name="title" placeholder="e.g. Linear algebra — lecture 3">
+    <label for="context">Context (optional)</label><textarea id="context" name="context" placeholder="Paste lecture notes or what the teacher said…"></textarea>
+    <div class="row">
+      <div><label for="lang2">Notes language</label><select id="lang2" name="lang"><option value="en">English</option><option value="fr">Français</option></select></div>
+      <div><label for="model2">Model</label><select id="model2" name="model">{% for m in models %}<option>{{ m }}</option>{% endfor %}</select></div>
+    </div>
+    <label class="check"><input type="checkbox" name="verify" value="1"> Verify formulas &amp; key points with Chain-of-Verification <span class="hint">(≈2× slower)</span></label>
+    <button class="go">Generate notes</button>
+  </form>
+</div>
+
+<h2>Library</h2>
+{% if items %}
+<div class="lib">{% for it in items %}
+  <a class="item" href="{{ url_for('notes', item_id=it.id) }}"><span><b>{{ it.title }}</b><small>{% if it.images_mode %}From screenshots{% else %}{{ it.source }}{% if it.channel %} · {{ it.channel }}{% endif %}{% endif %}</small></span><span class="pill">{{ it.sections }} sections</span></a>
+{% endfor %}</div>
+{% else %}<p class="hint">No notes yet. Generated notes appear here and open instantly.</p>{% endif %}
+
+<footer>Powered by <b>Gemma 4</b> via the Gemini API · open source (MIT) · <a href="https://github.com/Matteodt974/hacktoberfest_project">GitHub</a></footer>
+</div>
+<script>
+document.querySelectorAll('.tabs button').forEach(function (b) {
+  b.addEventListener('click', function () {
+    document.querySelectorAll('.tabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    document.querySelectorAll('.tab').forEach(function (t) { t.classList.toggle('on', t.id === 'tab-' + b.dataset.tab); });
+  });
+});
+</script>
+</body></html>

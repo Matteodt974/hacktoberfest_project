@@ -42,3 +42,134 @@ Decisions, discoveries and pitfalls, in chronological order.
 - Up to 10 images/request works; we keep `max_images_per_section = 6` (spec) for latency and token cost.
 - YouTube (yt-dlp and youtube-transcript-api) still blocked from the container (proxy 403) → ingestion must run on
   Matteo's laptop; offline import path planned for M1.
+
+## M1 — Ingestion (code done, real run pending on Matteo's laptop)
+- `lecturify/ingest/youtube.py`: URL parsing (watch/youtu.be/shorts/embed/live/m./bare id), yt-dlp metadata
+  (`meta.json`, 20 min warning / 45 min refusal), video-only ≤720p download, transcript via
+  youtube-transcript-api v1.x (`YouTubeTranscriptApi().fetch`) with yt-dlp VTT fallback (manual then auto subs,
+  rolling-caption dedup by longest word overlap), `transcript_for_llm` grouping ~12 s lines prefixed `[mm:ss]`.
+- **Blocker**: the cloud container cannot reach YouTube (egress proxy 403 on youtube.com/googlevideo/ytimg).
+  Decision: ingestion + frame extraction run on Matteo's laptop; `python -m lecturify bundle <id>` zips
+  `data/<id>/` without the video so the cache can be moved here; `import-local` imports a local mp4 + .vtt.
+- Demo video: https://www.youtube.com/watch?v=LPZh9BOjkQs (3Blue1Brown, Essence of linear algebra playlist).
+
+## M2 — Frame sampling (algorithm validated on a synthetic video; real contact sheet pending)
+- Two passes over the video: pass 1 computes grayscale 160 px thumbnails, motion, Canny density and pHash for
+  every 1 s sample (low memory); pass 2 re-reads only the kept full-res frames.
+- pHash computed on the grayscale thumbnail (pHash downsizes to 32×32 anyway).
+- **Added rule (not in spec): partial-drawing subsumption.** Slow animations (motion < threshold) produced
+  several half-drawn "stable" frames. A frame A is dropped if a later frame B within 20 s has ≥ edge density and
+  contains ≥ 85 % of A's (Canny) edge pixels. That is exactly "keep the most complete drawing".
+- Removed an "auto-loosen when few frames" loop I had added: it pushed the threshold to 6.75 and made a
+  continuously-moving wave count as stable. Spec behavior kept: tighten above 150, uniform fallback below 5.
+- Synthetic test (`scripts/make_synthetic_video.py`, 66 s, 3B1B-like dark background, 6 animate-then-hold scenes,
+  1 always-moving wave, 1 black screen): **6 frames kept, exactly one per hold, all complete drawings**;
+  wave and black screen rejected.
+- **Bug found on Matteo's laptop:** `No frames could be read from the video`. Root cause reproduced here: YouTube
+  serves many 720p video-only streams as **AV1**; OpenCV wheels open the file but cannot decode a single frame.
+  Fix: (1) yt-dlp format now prefers H.264 (`vcodec^=avc1`); (2) `frames.ensure_decodable` transcodes to H.264
+  (`video_h264.mp4`) with the static ffmpeg shipped by `imageio-ffmpeg` (new dependency, no system ffmpeg needed).
+  Verified: the synthetic video re-encoded to AV1 → same 6 frames. `bundle` now skips every video file.
+
+## M2 — validated on the real demo video
+- Matteo ran ingest + frames on his laptop (YouTube served **AV1** → fixed above): **27 frames kept** for the
+  8-min video. Visual check of the contact sheet: complete diagrams, no black/blank frames; 2–3 near-duplicates
+  (e.g. 02:06 vs 02:21) which Pass 2 absorbs by choosing one image per section.
+- ⚠️ The demo URL's `v=LPZh9BOjkQs` is **"Large Language Models explained briefly"** (3Blue1Brown), not a
+  linear-algebra episode (the `list=` param is ignored). It has few formulas → weak demo of "formulas read from
+  images". Recommendation to Matteo: also ingest a math-heavy video (e.g. "The determinant", `Ip3X9LOh2dk`).
+- Data moved here with `python -m lecturify bundle` (1.6 MB zip, no video).
+
+## M3 — Pass 1 (outline)
+- `pipeline/outline.py`: full `[mm:ss]` transcript in one call (2k tokens in); post-validation sorts, clamps,
+  makes sections contiguous and covering [0, duration], merges sections < 30 s.
+- Section target 4–10 (2–5 if video < 4 min).
+- Real run: **5 coherent sections** (Next-word prediction / Training / RLHF+GPUs / Transformer / Emergence),
+  85 s latency with `thinking_level="high"`.
+- Network: one `httpx.ReadError: Connection reset by peer` on the first try → transport errors are now retried
+  like 429/5xx.
+
+## M4 — Pass 2 (multimodal notes)
+- One Gemma call per section: header → `Image k — t=mm:ss` + inline JPEG (≤ 6, one per time slice, highest edge
+  density) → section transcript → tasks + JSON shape. 3 sections in parallel.
+- Real run on the demo video: Gemma picked a figure per section with a sensible reason, and **read content off the
+  frames**: embedding vectors (`\begin{bmatrix} +1.0 \\ +4.3 …`) from 05:09, the arithmetic from the "1 billion
+  computations per second" frame, `\vec{E}_1 … \vec{E}_8` from the series end card.
+- v1 prompt over-transcribed (10 trivial additions, 12 near-identical vectors) and repeated the section title as `#`.
+  v2 prompt: "skip decorative numbers, 1–2 representative items for repeated ones, ≤ 6 formulas, no title heading".
+  Result: 0–3 meaningful formulas per section.
+- Observed: one response missing `notes_markdown` and one malformed JSON → the single repair round fixed both.
+- API instability is real (HTTP 500 bursts, `ReadError` connection resets, one call needed 4 attempts) →
+  retries 7, backoff capped at 30 s. Latency per multimodal call: 17–100 s with `thinking_level="high"`.
+
+## M5 — Render → CLI MVP
+- `render/html.py`: Markdown with math protected by placeholders (unit-tested: `a_1 … b_2` no italics, backslashes
+  kept, `<` escaped, `$5 … $10` not math), leading title heading stripped, frames inlined as base64 (2.5 MB file).
+- Template: header, TOC, one card per section (figure + caption, formulas with source badges, notes, key points,
+  "What Gemma saw" panel with candidates, chosen one highlighted + reason), slides mode (← → Esc), print CSS (one
+  section per page, panel hidden), footer with model + stats.
+- KaTeX: CDN (jsDelivr) in `output.html`; a vendored copy (`web/static/katex`, MIT, woff2 only, 612 KB, fetched from
+  the npm registry) for the web UI. `render(..., katex_base=...)` switches between them.
+- Stats: cached Gemma responses now store their cost (calls, latency, tokens) and replay it, so the footer shows what
+  produced the notes even on a cached rerun (older cache entries count 1 call, no latency).
+- Verified in headless Chromium: 7 formulas typeset, 0 KaTeX errors, figures and panel OK, slides OK.
+- `python -m lecturify run <url>` works fully offline once a video is cached (every step skips on its JSON);
+  rebuilding outline/notes from `llm_cache` reproduced `notes.json` byte for byte.
+
+## M6 — Flask UI
+- Routes per spec (`/`, `POST /jobs`, `GET /jobs/<id>`, `/jobs/<id>/view`, `/notes/<id>`) + `/jobs/images`,
+  `/frames/<id>/<name>` (live thumbnail strip) and `/notes/<id>/download`. In-memory job registry, worker thread.
+- `/notes/<id>` re-renders with the **local KaTeX copy** (`output_web.html`) → the demo works without CDN access.
+- Bug found by driving the UI in Chromium: `url_for` called from the worker thread → "Working outside of application
+  context" → every job failed. Fixed: the thread stores raw (item_id, file) pairs, URLs are built in the request.
+- Verified in headless Chromium: submit URL → progress page → auto-redirect to the notes; KaTeX 7/0 errors;
+  path traversal on `/notes/..%2F..` → 404. Readable error messages instead of stack traces.
+
+## M7 — Screenshots mode, slides, print, "What Gemma saw"
+- `pipeline/images_mode.py`: 1–20 images resized to 1024 px → **step A**, one multimodal call grouping images into
+  sections (512 px when > 10 images) → **step B**, Pass 2 per group with the user's context as transcript. Cached under
+  `data/images_<hash>/`. CLI `python -m lecturify images <files|dir> --title --context-file`, web tab "My screenshots".
+- Bug found on the first real run: **Gemma returned 0-based `image_indices`** although images are labeled "Image 1…",
+  which shifted every section title by one. Fix: prompt states "1-based, Image 1 is 1, last is k", and `_groups`
+  detects a 0-based answer (min 0, max k-1) and shifts it. Unit-tested.
+- Test deck: 4 dark math slides rendered with matplotlib (limit definition, power rule, chain rule, gradient).
+  Gemma transcribed **all 6 formulas exactly** (`\lim_{h \to 0} \frac{f(x+h)-f(x)}{h}`, `\nabla f = (\partial f/\partial x, …)`),
+  3 coherent sections, 4 calls / 206 s model latency. Browser upload path tested too (Playwright).
+- Slides mode (one section per screen, ← → Esc) and print CSS (each section starts a page, panel and toolbar hidden)
+  were built into the M5 template; verified via screenshots and a Chromium PDF (12 pages for 5 sections).
+- Formulas are laid out side by side (flex) instead of one tall vector per row.
+
+## Robustness fix after Matteo's laptop run (before M8)
+- Matteo's run crashed on `pass2:section5: model did not return valid JSON after repair: Expecting ',' delimiter`.
+  Re-running worked immediately because the outline and the 4 other sections came from `llm_cache`.
+- A single bad section must never kill the demo. Three layers now:
+  1. local repair with `json-repair` (MIT) when `json.loads` fails (unescaped quotes, missing commas) — no API call;
+  2. the existing LLM "repair" round; 3. one fresh attempt with the original prompt.
+- If a section still fails, `make_notes` writes a placeholder section (`"failed": true`, the outline summary + an
+  explanation) and the run completes; the next run regenerates only failed sections. Unit-tested with a fake client.
+
+## M8 — Chain-of-Verification (stretch, done)
+- `pipeline/verify.py`, factored CoVe per Dhuliawala et al. 2023 (arXiv:2309.11495): **plan** (one question per
+  formula and key point; the prompt forbids putting the draft's answer in the question) → **execute**, each question
+  in a separate call with only the source frame (the formula's `image_index`, else the chosen figure) + transcript,
+  never the draft (unit test asserts the draft text never reaches an answer prompt) → **revise**, verified /
+  corrected / doubtful. Plan and answers use `thinking="minimal"`, revise uses `"high"`.
+- Flag `--verify` (CLI `run` / `images`), checkbox in the web UI, extra progress step. Output `verification.json`.
+- Render: ✓ / ✎ / ⚠ badges next to formulas and key points (tooltip = question + independent answer + note),
+  corrected formulas show the draft reading underneath, global counter in the header.
+- Bugs on the first real run: Gemma answers `"answer": null` when it finds nothing (schema rejected it) and one bad
+  answer failed the whole section → `null` accepted, a failed question counts as "not found".
+- Calculus slides result: **all 7 formulas verified**, 1 key point reworded, 6 key points "doubtful" because they
+  contain general knowledge absent from the slides (e.g. "the gradient points to the steepest ascent"). Those are
+  labeled **"not in source"**, which is honest and is exactly what CoVe is for.
+- CoVe iteration on real output: the verifier said "not found" for true statements because (a) planned questions said
+  "according to the notes" (the verifier never sees them) and (b) key points were checked against the chosen figure
+  only. Fixes: plan prompt forbids referring to the notes; key-point questions get all the section's frames.
+  Result on the calculus slides: 9 verified, 0 corrected, 6 "not in source" (genuine additions absent from the slides).
+- Web flow with the CoVe checkbox verified in Chromium (progress shows the Verification step; 14 badges rendered).
+
+## M9 — README + submission
+- README: real screenshot (`docs/screenshot.png`, made from our own generated slides; no third-party video frames
+  committed), CoVe and screenshots mode documented, quickstart starts with `python -m lecturify web`, dependency
+  licenses (json-repair added), limitations incl. API instability.
+- The `mvp` tag exists locally on a46af87 but this environment can only push the branch (tag push → HTTP 403).

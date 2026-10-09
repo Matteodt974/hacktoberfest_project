@@ -61,6 +61,15 @@ class Stats:
                 self.prompt_tokens += usage.get("prompt_token_count") or 0
                 self.output_tokens += usage.get("candidates_token_count") or 0
 
+    def replay(self, cost: dict) -> None:
+        """Count the original cost of a cached response, so stats describe what produced the notes."""
+        with self._lock:
+            self.cache_hits += 1
+            self.calls += cost.get("calls", 1)
+            self.latency_s += cost.get("latency_s", 0.0)
+            self.prompt_tokens += cost.get("prompt_tokens", 0)
+            self.output_tokens += cost.get("output_tokens", 0)
+
     def as_dict(self) -> dict:
         return {
             "calls": self.calls,
@@ -76,7 +85,7 @@ class LLMError(RuntimeError):
 
 
 class GemmaClient:
-    def __init__(self, *, concurrency: int = 2, max_retries: int = 5, json_mode: bool | None = None):
+    def __init__(self, *, concurrency: int = 2, max_retries: int = 7, json_mode: bool | None = None):
         from google import genai  # imported lazily so offline commands work without a key
 
         if not os.environ.get("GEMINI_API_KEY") and not os.environ.get("GOOGLE_API_KEY"):
@@ -118,6 +127,7 @@ class GemmaClient:
         thinking: str | None = "minimal", json_mode: bool = False,
     ) -> tuple[str, dict]:
         """One raw call with retries on 429/5xx. Returns (text, usage)."""
+        import httpx
         from google.genai import errors
 
         contents = self._contents(parts)
@@ -128,21 +138,23 @@ class GemmaClient:
             try:
                 with self._sem:
                     resp = self._client.models.generate_content(model=model, contents=contents, config=config)
-            except errors.APIError as e:
-                code = getattr(e, "code", None)
-                retryable = code == 429 or (isinstance(code, int) and code >= 500)
+            except (errors.APIError, httpx.TransportError) as e:
+                code = getattr(e, "code", None) if isinstance(e, errors.APIError) else type(e).__name__
+                retryable = (code == 429 or (isinstance(code, int) and code >= 500)
+                             or isinstance(e, httpx.TransportError))  # connection reset, timeouts
                 if not retryable or attempt == self.max_retries:
                     raise LLMError(f"{task_name}: Gemini API error {code}: {e}") from e
                 sleep = delay + random.uniform(0, delay / 2)
                 log.warning("%s: API %s (attempt %d/%d), retrying in %.1fs", task_name, code, attempt, self.max_retries, sleep)
                 time.sleep(sleep)
-                delay *= 2
+                delay = min(delay * 2, 30.0)
                 continue
             latency = time.time() - t0
             usage = {}
             if getattr(resp, "usage_metadata", None):
                 usage = resp.usage_metadata.model_dump(exclude_none=True)
             self.stats.add(latency=latency, usage=usage)
+            usage["_latency_s"] = latency
             text = resp.text or ""
             log.info("LLM %-22s model=%s latency=%.1fs cache=miss tokens_in=%s out=%s",
                      task_name, model, latency, usage.get("prompt_token_count"), usage.get("candidates_token_count"))
@@ -170,11 +182,20 @@ class GemmaClient:
         cache_file = cache_dir / f"{key}.json" if cache_dir else None
         if cache_file and cache_file.exists():
             cached = json.loads(cache_file.read_text())
-            self.stats.add(hit=True)
+            self.stats.replay(cached.get("cost", {}))
             log.info("LLM %-22s model=%s cache=hit", task_name, model)
             return schema.model_validate(cached["parsed"])
 
-        raw, _ = self._call_json(task_name, system, parts, model, thinking)
+        cost = {"calls": 0, "latency_s": 0.0, "prompt_tokens": 0, "output_tokens": 0}
+
+        def account(usage: dict) -> None:
+            cost["calls"] += 1
+            cost["latency_s"] = round(cost["latency_s"] + usage.get("_latency_s", 0.0), 2)
+            cost["prompt_tokens"] += usage.get("prompt_token_count") or 0
+            cost["output_tokens"] += usage.get("candidates_token_count") or 0
+
+        raw, usage = self._call_json(task_name, system, parts, model, thinking)
+        account(usage)
         try:
             parsed = self._validate(raw, schema)
         except (ValueError, ValidationError) as err:
@@ -184,16 +205,23 @@ class GemmaClient:
                 f"\n\nYour answer was not valid JSON or did not match the schema: {str(err)[:800]}\n"
                 "Return ONLY the corrected JSON object. Remember: write every LaTeX backslash as two backslashes.",
             ]
-            raw, _ = self._call_json(task_name + ":repair", system, repair, model, thinking)
+            raw, usage = self._call_json(task_name + ":repair", system, repair, model, thinking)
+            account(usage)
             try:
                 parsed = self._validate(raw, schema)
             except (ValueError, ValidationError) as err2:
-                raise LLMError(f"{task_name}: model did not return valid JSON after repair: {err2}") from err2
+                log.warning("%s: repair failed too (%s), one fresh attempt", task_name, str(err2)[:200])
+                raw, usage = self._call_json(task_name + ":retry", system, parts, model, thinking)
+                account(usage)
+                try:
+                    parsed = self._validate(raw, schema)
+                except (ValueError, ValidationError) as err3:
+                    raise LLMError(f"{task_name}: model did not return valid JSON after repair: {err3}") from err3
 
         if cache_file:
             cache_file.parent.mkdir(parents=True, exist_ok=True)
             cache_file.write_text(json.dumps(
-                {"task": task_name, "model": model, "raw": raw, "parsed": parsed.model_dump()},
+                {"task": task_name, "model": model, "cost": cost, "raw": raw, "parsed": parsed.model_dump()},
                 ensure_ascii=False, indent=1))
         return parsed
 

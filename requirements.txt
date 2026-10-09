@@ -1,9 +1,11 @@
 google-genai>=2.29
 python-dotenv>=1.0
 pydantic>=2.7
+json-repair>=0.30
 yt-dlp>=2025.1.1
 youtube-transcript-api>=1.2
 opencv-python-headless>=4.10
+imageio-ffmpeg>=0.5
 numpy>=1.26
 Pillow>=10.0
 imagehash>=4.3

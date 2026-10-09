@@ -46,3 +46,16 @@ def test_sanitize_text_keeps_newlines():
 def test_sanitize_tree_latex_key_only_strict():
     out = sanitize_tree({"latex": "\nabla", "notes_markdown": "x\ny", "formulas": [{"latex": "\theta"}]})
     assert out == {"latex": r"\nabla", "notes_markdown": "x\ny", "formulas": [{"latex": r"\theta"}]}
+
+
+def test_unescaped_quotes_repaired_locally():
+    raw = '{"notes_markdown": "the word "bank" means", "key_points": ["a" "b"], "latex": "\\frac{1}{2}"}'
+    out = parse_json(raw)
+    assert out["notes_markdown"] == 'the word "bank" means'
+    assert out["key_points"] == ["a", "b"]
+    assert out["latex"] == "\\frac{1}{2}"
+
+
+def test_garbage_still_raises():
+    with pytest.raises(ValueError):
+        parse_json("no json here")

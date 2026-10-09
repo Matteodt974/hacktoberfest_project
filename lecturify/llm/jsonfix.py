@@ -76,7 +76,17 @@ def extract_json_text(text: str) -> str:
 
 
 def parse_json(text: str) -> Any:
-    return json.loads(fix_latex_escapes(extract_json_text(text)), strict=False)
+    fixed = fix_latex_escapes(extract_json_text(text))
+    try:
+        return json.loads(fixed, strict=False)
+    except json.JSONDecodeError as err:
+        # Typical model slips: unescaped quotes inside strings, missing commas, trailing commas.
+        from json_repair import repair_json
+
+        obj = repair_json(fixed, return_objects=True)
+        if not isinstance(obj, dict) or not obj:
+            raise ValueError(f"invalid JSON: {err}") from err
+        return obj
 
 
 _CTRL_PARTIAL = {"\x0c": "\\f", "\x08": "\\b", "\t": "\\t", "\r": "\\r"}

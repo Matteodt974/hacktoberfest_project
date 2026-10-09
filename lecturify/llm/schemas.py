@@ -60,3 +60,56 @@ class SmokeFormula(BaseModel):
 class SmokeImages(BaseModel):
     count: int
     descriptions: list[str]
+
+
+# ---------------------------------------------------------------- screenshots mode
+class ImageGroup(BaseModel):
+    title: str
+    image_indices: list[int]  # 1-based
+    summary: str = ""
+    key_concepts: list[str] = Field(default_factory=list)
+
+
+class ImagesOutline(BaseModel):
+    course_title: str
+    summary: str = ""
+    prerequisites: list[str] = Field(default_factory=list)
+    sections: list[ImageGroup]
+
+
+# ---------------------------------------------------------------- CoVe verification (Dhuliawala et al., 2023)
+class VQuestion(BaseModel):
+    target: str  # "formula:1" or "key_point:2" (1-based)
+    question: str
+
+
+class VPlan(BaseModel):
+    questions: list[VQuestion]
+
+
+class VAnswer(BaseModel):
+    found: bool = True
+    answer: str = ""
+    latex: str | None = None
+
+    @field_validator("answer", mode="before")
+    @classmethod
+    def _none_to_empty(cls, v):  # Gemma answers null when it finds nothing
+        return "" if v is None else str(v)
+
+
+class VItem(BaseModel):
+    target: str
+    status: Literal["verified", "corrected", "doubtful"] = "doubtful"
+    correction: str | None = None  # corrected LaTeX (formula) or text (key point)
+    note: str = ""
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def _norm_status(cls, v):
+        v = str(v or "").lower()
+        return "verified" if v.startswith("verif") else "corrected" if v.startswith("correct") else "doubtful"
+
+
+class VRevision(BaseModel):
+    items: list[VItem]
